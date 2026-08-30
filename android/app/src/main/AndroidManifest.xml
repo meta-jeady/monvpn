@@ -1,36 +1,66 @@
-<manifest xmlns:android="http://android.com"
-    package="com.example.kco4p_vpn">
-    
-    <!-- Permissions obligatoires pour le fonctionnement du VPN -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.kco4p.kco4p_vpn">
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="KČØ4P VPN"
+        android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:hardwareAccelerated="true">
-        
-        <!-- Activité principale de l'application Flutter -->
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true"
+        android:extractNativeLibs="true">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|locale|layoutDirection|fontScale"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|locale|layoutDirection|fontScale|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            
-            <!-- Déclare cette vue comme l'écran de démarrage par défaut -->
+
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        
-        <!-- Balise requise par le framework Flutter pour charger son moteur -->
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <service
+            android:name="com.github.blueboytm.flutter_v2ray.v2ray.services.V2rayVPNService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn" />
+        </service>
+
+        <service
+            android:name="com.github.blueboytm.flutter_v2ray.v2ray.services.V2rayProxyOnlyService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="proxy" />
+        </service>
+
     </application>
 </manifest>
