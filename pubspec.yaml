@@ -11,6 +11,13 @@ dependencies:
     sdk: flutter
   flutter_v2ray: ^1.0.10
   cupertino_icons: ^1.0.8
+  # AJOUTS POUR .KT SANS CASSER BUILD
+  path_provider: ^2.1.2
+  share_plus: ^7.2.2
+  file_picker: ^8.1.2
+  encrypt: ^5.0.3
+  receive_sharing_intent: ^1.4.5
+  pointycastle: ^3.7.3
 
 dev_dependencies:
   flutter_test:
