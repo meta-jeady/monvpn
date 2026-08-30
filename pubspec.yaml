@@ -1,0 +1,11 @@
+name: kco4p_vpn
+description: Application VPN Professionnelle KČØ4P complète et fonctionnelle.
+version: 1.0.0+1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_v2ray: ^1.2.5
+flutter:
+  uses-material-design: true
