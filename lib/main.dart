@@ -1,492 +1,256 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:encrypt/encrypt.dart' as enc;
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-  runApp(const Kco4pVPNApp());
+void main() => runApp(const Kco4pVPNApp());
+
+class C {
+  static const vert = Color(0xFF009A44);
+  static const jaune = Color(0xFFFCD116);
+  static const rouge = Color(0xFFCE1126);
+  static const bg = Color(0xFF0F1A0F);
+  static const card = Color(0xFF1A2E1A);
 }
 
 class Kco4pVPNApp extends StatelessWidget {
   const Kco4pVPNApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KČØ4P VPN',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0B1220),
-      ),
-      home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: C.bg),
+      home: const HomePage(),
     );
   }
 }
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
+class Logs {
+  static List<String> list = [];
+  static ValueNotifier<int> n = ValueNotifier(0);
+  static void add(String m) {
+    list.add("[${DateTime.now().toString().substring(11,19)}] $m");
+    n.value++;
+  }
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class KTManager {
+  static String _k(String p) {
+    String k = p.padRight(32, '0');
+    return k.length > 32? k.substring(0, 32) : k;
+  }
+  static Future<File> exportKT(String host, String config, String mode, String pwd) async {
+    final payload = jsonEncode({"host": host, "config": config, "mode": mode});
+    final key = enc.Key.fromUtf8(_k(pwd));
+    final iv = enc.IV.fromSecureRandom(16);
+    final encr = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc)).encrypt(payload, iv: iv);
+    final data = jsonEncode({"type": "KCO4P_LOCKED", "iv": iv.base64, "data": encr.base64});
+    final dir = await getApplicationDocumentsDirectory();
+    final f = File("${dir.path}/${DateTime.now().millisecondsSinceEpoch}.kt");
+    await f.writeAsString(data);
+    return f;
+  }
+  static Future<Map<String,dynamic>?> importKT(String path, String pwd) async {
+    try {
+      final outer = jsonDecode(await File(path).readAsString());
+      final key = enc.Key.fromUtf8(_k(pwd));
+      final iv = enc.IV.fromBase64(outer["iv"]);
+      final dec = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc)).decrypt(enc.Encrypted.fromBase64(outer["data"]), iv: iv);
+      return jsonDecode(dec);
+    } catch (_) { return null; }
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
   late FlutterV2ray v2ray;
-
   String statut = "DÉCONNECTÉ";
-  bool estConnecte = false;
-  bool enCours = false;
-  String modeSelectionne = "VLESS / VMess";
-
-  final List<String> modes = [
-    "VLESS / VMess",
-    "UDP",
-    "SlowDNS",
-    "SSH",
-    "Trojan",
-  ];
-
-  final TextEditingController hostCtrl = TextEditingController();
-  final TextEditingController configCtrl = TextEditingController();
-  final List<String> logs = [];
-  final ScrollController logScroll = ScrollController();
+  bool estConnecte = false, enCours = false;
+  String mode = "VLESS / VMess";
+  final modes = ["VLESS / VMess", "UDP", "SlowDNS", "SSH", "Trojan"];
+  final hostCtrl = TextEditingController(text: "yamo.mtn.cm");
+  final configCtrl = TextEditingController();
+  final passCtrl = TextEditingController(text: "237");
 
   @override
   void initState() {
     super.initState();
-    v2ray = FlutterV2ray(
-      onStatusChanged: (status) {
-        if (!mounted) return;
-        final state = status.state.toUpperCase();
-        addLog("→ $state");
-
-        setState(() {
-          if (state == "CONNECTED") {
-            statut = "kcorp vpn connecter";
-            estConnecte = true;
-            enCours = false;
-          } else if (state == "CONNECTING") {
-            statut = "CONNEXION...";
-            enCours = true;
-            estConnecte = false;
-          } else {
-            statut = "DÉCONNECTÉ";
-            estConnecte = false;
-            enCours = false;
-          }
-        });
-      },
-    );
-    initCore();
-  }
-
-  Future<void> initCore() async {
-    addLog("Démarrage du core...");
-    await v2ray.initializeV2Ray();
-    try {
-      final version = await v2ray.getCoreVersion();
-      addLog("Core prêt - Xray $version");
-    } catch (e) {
-      addLog("Erreur core: $e");
-    }
-  }
-
-  void addLog(String msg) {
-    final time = DateTime.now().toString().substring(11, 19);
-    setState(() {
-      logs.add("[$time] $msg");
+    v2ray = FlutterV2ray(onStatusChanged: (s) {
+      if (!mounted) return;
+      final st = s.state.toUpperCase();
+      Logs.add("→ $st");
+      setState(() {
+        if (st == "CONNECTED") {
+          statut = "kcorp vpn connecter";
+          estConnecte = true;
+          enCours = false;
+        } else if (st == "CONNECTING") {
+          statut = "CONNEXION...";
+          enCours = true;
+          estConnecte = false;
+        } else {
+          statut = "DÉCONNECTÉ";
+          estConnecte = false;
+          enCours = false;
+        }
+      });
     });
-    Future.delayed(const Duration(milliseconds: 80), () {
-      if (logScroll.hasClients) {
-        logScroll.jumpTo(logScroll.position.maxScrollExtent);
-      }
-    });
-  }
-
-  String get notificationName {
-    switch (modeSelectionne) {
-      case "UDP":
-        return "kčø4p UDP connected";
-      case "SlowDNS":
-        return "kčø4p SlowDNS connected";
-      case "SSH":
-        return "kčø4p SSH connected";
-      case "Trojan":
-        return "kčø4p Trojan connected";
-      default:
-        return "kčø4p VLESS connected";
-    }
+    v2ray.initializeV2Ray();
   }
 
   String? buildFinalConfig(String raw, String host) {
     try {
-      if (raw.trim().startsWith("{")) {
-        addLog("JSON détecté");
-        return raw.trim();
-      }
-
-      if (!raw.startsWith("vless://") &&
-          !raw.startsWith("vmess://") &&
-          !raw.startsWith("trojan://")) {
-        return null;
-      }
-
-      addLog("Transformation du lien...");
+      if (raw.trim().startsWith("{")) return raw.trim();
+      if (!raw.startsWith("vless://") &&!raw.startsWith("vmess://") &&!raw.startsWith("trojan://")) return null;
       final parser = FlutterV2ray.parseFromURL(raw.trim());
-      final full = parser.getFullConfiguration();
-      final Map<String, dynamic> json = jsonDecode(full);
-
-      if (host.isNotEmpty && json["outbounds"] != null && json["outbounds"].isNotEmpty) {
+      final Map<String, dynamic> json = jsonDecode(parser.getFullConfiguration());
+      if (host.isNotEmpty && json["outbounds"]!= null) {
         final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"] ?? {};
-        final network = stream["network"] ?? "ws";
-
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
         if (network == "ws") {
-          stream["wsSettings"] ??= {};
-          stream["wsSettings"]["headers"] ??= {};
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
           stream["wsSettings"]["headers"]["Host"] = host;
-          addLog("Host injecté: $host");
-        } else if (network == "http" || network == "h2") {
-          stream["httpSettings"] ??= {};
-          stream["httpSettings"]["host"] = [host];
-          addLog("Host HTTP injecté: $host");
         }
         outbound["streamSettings"] = stream;
       }
-
       return jsonEncode(json);
     } catch (e) {
-      addLog("Erreur: $e");
       return null;
     }
   }
 
   Future<void> toggle() async {
     if (estConnecte || enCours) {
-      addLog("Déconnexion...");
       await v2ray.stopV2Ray();
-      setState(() {
-        estConnecte = false;
-        enCours = false;
-        statut = "DÉCONNECTÉ";
-      });
-      addLog("Déconnecté");
       return;
     }
-
     final raw = configCtrl.text.trim();
     final host = hostCtrl.text.trim();
-
-    if (raw.isEmpty) {
-      addLog("Aucune configuration");
-      return;
-    }
-
-    // Pour l'instant seuls VLESS/VMess/Trojan sont supportés
-    if (modeSelectionne == "UDP" || modeSelectionne == "SlowDNS" || modeSelectionne == "SSH") {
-      addLog("Mode $modeSelectionne pas encore disponible (demain)");
-      setState(() => statut = "MODE BIENTÔT DISPO");
-      return;
-    }
-
+    if (raw.isEmpty) return;
     final config = buildFinalConfig(raw, host);
     if (config == null) {
       setState(() => statut = "CONFIG INVALIDE");
-      addLog("Configuration invalide");
       return;
     }
-
-    setState(() {
-      enCours = true;
-      statut = "CONNEXION...";
-    });
-
-    addLog("Mode: $modeSelectionne");
-    addLog("Demande permission VPN...");
-
-    try {
-      final ok = await v2ray.requestPermission();
-      if (!ok) {
-        addLog("Permission refusée");
-        setState(() {
-          enCours = false;
-          statut = "PERMISSION REFUSÉE";
-        });
-        return;
-      }
-
-      addLog("Lancement du tunnel...");
-      await v2ray.startV2Ray(
-        remark: notificationName,
-        config: config,
-        blockedApps: [],
-      );
-    } catch (e) {
-      addLog("Échec: $e");
-      setState(() {
-        enCours = false;
-        statut = "ÉCHEC";
-      });
+    setState(() { enCours = true; statut = "CONNEXION..."; });
+    final ok = await v2ray.requestPermission();
+    if (!ok) {
+      setState(() { enCours = false; statut = "PERMISSION REFUSÉE"; });
+      return;
     }
+    await v2ray.startV2Ray(remark: "kčø4p connected", config: config);
   }
 
-  void exportConfig() {
-    final data = {
-      "mode": modeSelectionne,
-      "host": hostCtrl.text.trim(),
-      "config": configCtrl.text.trim(),
-    };
-    final jsonStr = jsonEncode(data);
-    Clipboard.setData(ClipboardData(text: jsonStr));
-    addLog("Configuration exportée (copiée)");
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Configuration copiée dans le presse-papiers")),
-    );
+  void doExport() {
+    showDialog(context: context, builder: (_) => AlertDialog(
+      backgroundColor: C.card,
+      title: const Text("Exporter.kt 🔒"),
+      content: TextField(controller: passCtrl, decoration: const InputDecoration(labelText: "Mot de passe")),
+      actions: [
+        TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Annuler")),
+        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: C.vert), onPressed: () async {
+          Navigator.pop(context);
+          if (configCtrl.text.isEmpty) return;
+          final f = await KTManager.exportKT(hostCtrl.text, configCtrl.text, mode, passCtrl.text);
+          await Share.shareXFiles([XFile(f.path)]);
+        }, child: const Text("EXPORTER")),
+      ],
+    ));
   }
 
-  void importConfig() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    if (data?.text == null) return;
-
-    try {
-      final map = jsonDecode(data!.text!);
-      setState(() {
-        modeSelectionne = map["mode"] ?? "VLESS / VMess";
-        hostCtrl.text = map["host"] ?? "";
-        configCtrl.text = map["config"] ?? "";
-      });
-      addLog("Configuration importée");
-    } catch (e) {
-      addLog("Import échoué");
-    }
-  }
-
-  Color get couleur {
-    if (estConnecte) return const Color(0xFF10B981); // Vert
-    if (enCours) return const Color(0xFFF59E0B);
-    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
-      return const Color(0xFF6B7280);
-    }
-    return const Color(0xFFEF4444);
-  }
-
-  @override
-  void dispose() {
-    hostCtrl.dispose();
-    configCtrl.dispose();
-    logScroll.dispose();
-    super.dispose();
+  void doImport() async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['kt']);
+    if (res == null) return;
+    if (!mounted) return;
+    showDialog(context: context, builder: (_) => AlertDialog(
+      backgroundColor: C.card,
+      title: const Text("Importer.kt 🔓"),
+      content: TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: "Mot de passe")),
+      actions: [
+        TextButton(onPressed: ()=> Navigator.pop(context), child: const Text("Annuler")),
+        ElevatedButton(onPressed: () async {
+          Navigator.pop(context);
+          final data = await KTManager.importKT(res.files.single.path!, passCtrl.text);
+          if (data!= null) {
+            setState(() { hostCtrl.text = data["host"]; configCtrl.text = data["config"]; mode = data["mode"]; });
+          }
+        }, child: const Text("IMPORTER")),
+      ],
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    Color couleur = estConnecte? C.vert : enCours? C.jaune : C.rouge;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.group),
-            tooltip: "Groupe WhatsApp",
-            onPressed: () {
-              // Ouvre le lien WhatsApp
-              // Note: pour ouvrir vraiment le lien il faudra url_launcher plus tard
-              addLog("Groupe WhatsApp: https://chat.whatsapp.com/GtBg9UmAV0k0ZwyfA07NkX");
-            },
-          ),
-        ],
+      appBar: AppBar(backgroundColor: C.vert, title: const Text("KČØ4P • 237 🇨🇲 •.KT")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(children: [
+          Container(padding: const EdgeInsets.symmetric(horizontal:12), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(10)), child: DropdownButton<String>(value: mode, isExpanded: true, dropdownColor: C.card, underline: const SizedBox(), items: modes.map((m)=> DropdownMenuItem(value:m, child:Text(m))).toList(), onChanged: (v)=> setState(()=> mode=v!))),
+          const SizedBox(height:10),
+          Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: couleur, width:2)), child: Text(statut, textAlign: TextAlign.center, style: TextStyle(color: couleur, fontWeight: FontWeight.bold))),
+          const SizedBox(height:18),
+          GestureDetector(onTap: enCours? null : toggle, child: Container(width:140,height:140,decoration: BoxDecoration(shape:BoxShape.circle,color: C.card,border: Border.all(color: couleur,width:4)), child: Icon(Icons.power_settings_new, size:65, color:couleur))),
+          const SizedBox(height:16),
+          TextField(controller: hostCtrl, decoration: InputDecoration(labelText:"HOST", filled:true, fillColor:C.card, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))),
+          const SizedBox(height:10),
+          TextField(controller: configCtrl, maxLines:3, style: const TextStyle(fontSize:12, fontFamily:'monospace'), decoration: InputDecoration(labelText:"CONFIG VLESS", filled:true, fillColor:C.card, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))),
+          const SizedBox(height:12),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(onPressed: doImport, icon: const Icon(Icons.lock_open), label: const Text("IMPORTER.KT"))),
+            const SizedBox(width:10),
+            Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: C.vert), onPressed: doExport, icon: const Icon(Icons.lock), label: const Text("EXPORTER.KT"))),
+          ]),
+          const Spacer(),
+          SizedBox(width: double.infinity, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: C.card), onPressed: ()=> Navigator.push(context, MaterialPageRoute(builder: (_)=> const LogsPage())), icon: const Icon(Icons.terminal), label: const Text("ECRAN 2 - LOGS"))),
+        ]),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              // Message + Dropdown Mode
-              const Text(
-                "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: DropdownButton<String>(
-                  value: modeSelectionne,
-                  isExpanded: true,
-                  dropdownColor: const Color(0xFF1E293B),
-                  underline: const SizedBox(),
-                  style: const TextStyle(color: Colors.white),
-                  items: modes.map((m) {
-                    return DropdownMenuItem(value: m, child: Text(m));
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => modeSelectionne = value);
-                      addLog("Mode changé → $value");
-                    }
-                  },
-                ),
-              ),
+    );
+  }
+}
 
-              const SizedBox(height: 14),
-
-              // Statut
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  statut,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: estConnecte ? const Color(0xFF10B981) : couleur,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Bouton Power
-              GestureDetector(
-                onTap: enCours ? null : toggle,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF1E293B),
-                    border: Border.all(color: couleur, width: 4),
-                    boxShadow: [
-                      BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 25, spreadRadius: 4)
-                    ],
-                  ),
-                  child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Host
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.white60, fontSize: 12)),
-              ),
-              const SizedBox(height: 5),
-              TextField(
-                controller: hostCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: "Exemple: yamo.mtn.cm",
-                  hintStyle: const TextStyle(color: Colors.white30),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Configuration
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text("CONFIGURATION", style: TextStyle(color: Colors.white60, fontSize: 12)),
-              ),
-              const SizedBox(height: 5),
-              TextField(
-                controller: configCtrl,
-                maxLines: 3,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-                  hintStyle: const TextStyle(color: Colors.white30),
-                  filled: true,
-                  fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Boutons Import / Export
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: importConfig,
-                      icon: const Icon(Icons.download, size: 18),
-                      label: const Text("Import"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: exportConfig,
-                      icon: const Icon(Icons.upload, size: 18),
-                      label: const Text("Export"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // Logs
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text("LOGS", style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 5),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: ListView.builder(
-                    controller: logScroll,
-                    itemCount: logs.length,
-                    itemBuilder: (_, i) => Text(
-                      logs[i],
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontFamily: 'monospace'),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-              const Text(
-                "DEV : kcørp tech serf",
-                style: TextStyle(color: Colors.white38, fontSize: 11),
-              ),
-            ],
+class LogsPage extends StatelessWidget {
+  const LogsPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(backgroundColor: C.vert, title: const Text("Logs - Écran 2")),
+      body: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(10)),
+        child: ValueListenableBuilder(
+          valueListenable: Logs.n,
+          builder: (_, __, ___) => ListView.builder(
+            itemCount: Logs.list.length,
+            itemBuilder: (_, i) {
+              final log = Logs.list[i];
+              if (log.toUpperCase().contains("CONNECTED")) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(log, style: const TextStyle(color: Colors.white54, fontSize: 11, fontFamily: 'monospace')),
+                    const Text("free surf", style: TextStyle(color: Color(0xFF00FF00), fontSize: 16, fontWeight: FontWeight.bold)),
+                  ]),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(log, style: const TextStyle(color: Color(0xFF8BC34A), fontSize: 11, fontFamily: 'monospace')),
+              );
+            },
           ),
         ),
       ),
