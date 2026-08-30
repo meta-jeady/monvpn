@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
@@ -19,12 +20,7 @@ class Kco4pVPNApp extends StatelessWidget {
     return MaterialApp(
       title: 'KČØ4P VPN',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        primaryColor: const Color(0xFF1E293B),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF3B82F6),
-          secondary: Color(0xFF10B981),
-        ),
+        scaffoldBackgroundColor: const Color(0xFF0B1220),
       ),
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
@@ -41,14 +37,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late FlutterV2ray v2ray;
-  String statutConnection = "DÉCONNECTÉ";
-  bool estConnecte = false;
-  bool enCoursDeConnexion = false;
-  String? coreVersion;
 
-  final TextEditingController _configController = TextEditingController(
-    text: "vless://uuid@exemple.com:443?encryption=none&security=reality&sni=exemple.com&fp=chrome&pbk=publickey&sid=shortid&type=tcp#KCO4P-Serveur",
-  );
+  String statut = "DÉCONNECTÉ";
+  bool estConnecte = false;
+  bool enCours = false;
+
+  final TextEditingController hostCtrl = TextEditingController();
+  final TextEditingController configCtrl = TextEditingController();
+  final List<String> logs = [];
+  final ScrollController logScroll = ScrollController();
 
   @override
   void initState() {
@@ -56,112 +53,166 @@ class _HomeScreenState extends State<HomeScreen> {
     v2ray = FlutterV2ray(
       onStatusChanged: (status) {
         if (!mounted) return;
+        final state = status.state.toUpperCase();
+        addLog("→ $state");
+
         setState(() {
-          statutConnection = status.state.toUpperCase();
-          estConnecte = status.state == "CONNECTED";
-          enCoursDeConnexion = status.state == "CONNECTING";
+          statut = state;
+          estConnecte = state == "CONNECTED";
+          enCours = state == "CONNECTING";
+
+          if (state == "DISCONNECTED" || state == "STOPPED") {
+            estConnecte = false;
+            enCours = false;
+            statut = "DÉCONNECTÉ";
+          }
         });
       },
     );
-    _initV2Ray();
+    initCore();
   }
 
-  Future<void> _initV2Ray() async {
+  Future<void> initCore() async {
+    addLog("Démarrage du core Xray...");
     await v2ray.initializeV2Ray();
     try {
       final version = await v2ray.getCoreVersion();
-      if (mounted) {
-        setState(() => coreVersion = version);
-      }
-    } catch (_) {}
+      addLog("Core prêt - Xray $version");
+    } catch (e) {
+      addLog("Erreur core: $e");
+    }
   }
 
-  Future<void> basculerVPN() async {
-    if (estConnecte) {
+  void addLog(String msg) {
+    final time = DateTime.now().toString().substring(11, 19);
+    setState(() {
+      logs.add("[$time] $msg");
+    });
+    Future.delayed(const Duration(milliseconds: 80), () {
+      if (logScroll.hasClients) {
+        logScroll.jumpTo(logScroll.position.maxScrollExtent);
+      }
+    });
+  }
+
+  String? buildFinalConfig(String raw, String host) {
+    try {
+      if (raw.trim().startsWith("{")) {
+        addLog("JSON détecté");
+        return raw.trim();
+      }
+
+      if (!raw.startsWith("vless://") &&
+          !raw.startsWith("vmess://") &&
+          !raw.startsWith("trojan://")) {
+        return null;
+      }
+
+      addLog("Transformation du lien...");
+      final parser = FlutterV2ray.parseFromURL(raw.trim());
+      final full = parser.getFullConfiguration();
+      final Map<String, dynamic> json = jsonDecode(full);
+
+      if (host.isNotEmpty && json["outbounds"] != null && json["outbounds"].isNotEmpty) {
+        final outbound = json["outbounds"][0];
+        final stream = outbound["streamSettings"] ?? {};
+        final network = stream["network"] ?? "ws";
+
+        if (network == "ws") {
+          stream["wsSettings"] ??= {};
+          stream["wsSettings"]["headers"] ??= {};
+          stream["wsSettings"]["headers"]["Host"] = host;
+          addLog("Host injecté: $host");
+        } else if (network == "http" || network == "h2") {
+          stream["httpSettings"] ??= {};
+          stream["httpSettings"]["host"] = [host];
+          addLog("Host HTTP injecté: $host");
+        }
+
+        outbound["streamSettings"] = stream;
+      }
+
+      return jsonEncode(json);
+    } catch (e) {
+      addLog("Erreur: $e");
+      return null;
+    }
+  }
+
+  Future<void> toggle() async {
+    if (estConnecte || enCours) {
+      addLog("Déconnexion...");
       await v2ray.stopV2Ray();
       setState(() {
         estConnecte = false;
-        enCoursDeConnexion = false;
-        statutConnection = "DÉCONNECTÉ";
+        enCours = false;
+        statut = "DÉCONNECTÉ";
       });
+      addLog("Déconnecté");
       return;
     }
 
-    String config = _configController.text.trim();
-    if (config.isEmpty) {
-      _showSnack("Veuillez coller une configuration VLESS / VMess valide");
+    final raw = configCtrl.text.trim();
+    final host = hostCtrl.text.trim();
+
+    if (raw.isEmpty) {
+      addLog("Aucune configuration");
       return;
     }
 
-    if (!config.startsWith("vless://") &&
-        !config.startsWith("vmess://") &&
-        !config.startsWith("trojan://") &&
-        !config.startsWith("{")) {
-      _showSnack("Format non supporté. Utilisez vless://, vmess://, trojan:// ou JSON");
+    final config = buildFinalConfig(raw, host);
+    if (config == null) {
+      setState(() => statut = "CONFIG INVALIDE");
+      addLog("Configuration invalide");
       return;
     }
 
     setState(() {
-      enCoursDeConnexion = true;
-      statutConnection = "CONNEXION EN COURS...";
+      enCours = true;
+      statut = "CONNEXION...";
     });
 
+    addLog("Demande permission VPN...");
     try {
-      String finalConfig = config;
-      String remark = "KČØ4P Serveur";
-
-      if (config.startsWith("vless://") ||
-          config.startsWith("vmess://") ||
-          config.startsWith("trojan://")) {
-        final parser = FlutterV2ray.parseFromURL(config);
-        finalConfig = parser.getFullConfiguration();
-        remark = parser.remark.isNotEmpty ? parser.remark : "KČØ4P Serveur";
-      }
-
-      final hasPermission = await v2ray.requestPermission();
-      if (!hasPermission) {
+      final ok = await v2ray.requestPermission();
+      if (!ok) {
+        addLog("Permission refusée");
         setState(() {
-          enCoursDeConnexion = false;
-          statutConnection = "PERMISSION REFUSÉE";
+          enCours = false;
+          statut = "PERMISSION REFUSÉE";
         });
-        _showSnack("Permission VPN refusée par l'utilisateur");
         return;
       }
 
+      addLog("Lancement du tunnel...");
       await v2ray.startV2Ray(
-        remark: remark,
-        config: finalConfig,
+        remark: host.isEmpty ? "KČØ4P" : "KČØ4P ($host)",
+        config: config,
         blockedApps: [],
       );
     } catch (e) {
+      addLog("Échec: $e");
       setState(() {
-        enCoursDeConnexion = false;
-        statutConnection = "ERREUR";
+        enCours = false;
+        statut = "ÉCHEC";
       });
-      _showSnack("Erreur de connexion : $e");
     }
   }
 
-  void _showSnack(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF1E293B),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  Color obtenirCouleurBouton() {
+  Color get couleur {
     if (estConnecte) return const Color(0xFF10B981);
-    if (enCoursDeConnexion) return const Color(0xFFF59E0B);
+    if (enCours) return const Color(0xFFF59E0B);
+    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
+      return const Color(0xFF6B7280);
+    }
     return const Color(0xFFEF4444);
   }
 
   @override
   void dispose() {
-    _configController.dispose();
+    hostCtrl.dispose();
+    configCtrl.dispose();
+    logScroll.dispose();
     super.dispose();
   }
 
@@ -169,124 +220,120 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "KČØ4P VPN",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-            color: Colors.white,
-          ),
-        ),
+        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
-        actions: [
-          if (coreVersion != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                child: Text(
-                  "Xray $coreVersion",
-                  style: const TextStyle(fontSize: 11, color: Colors.white54),
-                ),
-              ),
-            ),
-        ],
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Card(
-                color: const Color(0xFF1E293B),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+              // Statut
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 18.0,
-                    horizontal: 28.0,
-                  ),
-                  child: Text(
-                    statutConnection,
-                    style: TextStyle(
-                      color: obtenirCouleurBouton(),
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
+                child: Text(
+                  statut,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: couleur, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
+
+              const SizedBox(height: 18),
+
+              // Bouton
               GestureDetector(
-                onTap: enCoursDeConnexion ? null : basculerVPN,
+                onTap: enCours ? null : toggle,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: 200,
-                  height: 200,
+                  duration: const Duration(milliseconds: 250),
+                  width: 150,
+                  height: 150,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFF1E293B),
-                    border: Border.all(
-                      color: obtenirCouleurBouton(),
-                      width: 4,
-                    ),
+                    border: Border.all(color: couleur, width: 4),
                     boxShadow: [
-                      BoxShadow(
-                        color: obtenirCouleurBouton().withOpacity(0.4),
-                        blurRadius: 40,
-                        spreadRadius: 8,
-                      ),
+                      BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 28, spreadRadius: 5)
                     ],
                   ),
-                  child: Icon(
-                    Icons.power_settings_new_rounded,
-                    size: 90,
-                    color: obtenirCouleurBouton(),
-                  ),
+                  child: Icon(Icons.power_settings_new_rounded, size: 70, color: couleur),
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "CONFIGURATION (VLESS / VMess / Trojan / JSON)",
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+
+              const SizedBox(height: 18),
+
+              // Host
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.white60, fontSize: 12)),
+              ),
+              const SizedBox(height: 5),
+              TextField(
+                controller: hostCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: "Exemple: yamo.mtn.cm",
+                  hintStyle: const TextStyle(color: Colors.white30),
+                  filled: true,
+                  fillColor: const Color(0xFF1E293B),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Configuration
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("CONFIGURATION (colle ton lien ici)", style: TextStyle(color: Colors.white60, fontSize: 12)),
+              ),
+              const SizedBox(height: 5),
+              TextField(
+                controller: configCtrl,
+                maxLines: 3,
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  hintText: "vless://... ou vmess://... ou JSON",
+                  hintStyle: const TextStyle(color: Colors.white30),
+                  filled: true,
+                  fillColor: const Color(0xFF1E293B),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Logs
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("LOGS", style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 5),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: ListView.builder(
+                    controller: logScroll,
+                    itemCount: logs.length,
+                    itemBuilder: (_, i) => Text(
+                      logs[i],
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontFamily: 'monospace'),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _configController,
-                    maxLines: 4,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                    ),
-                    decoration: InputDecoration(
-                      hintText: "Collez votre lien vless:// ou vmess:// ici...",
-                      hintStyle: const TextStyle(color: Colors.white38),
-                      filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF3B82F6),
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
