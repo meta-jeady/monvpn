@@ -41,6 +41,15 @@ class _HomeScreenState extends State<HomeScreen> {
   String statut = "DÉCONNECTÉ";
   bool estConnecte = false;
   bool enCours = false;
+  String modeSelectionne = "VLESS / VMess";
+
+  final List<String> modes = [
+    "VLESS / VMess",
+    "UDP",
+    "SlowDNS",
+    "SSH",
+    "Trojan",
+  ];
 
   final TextEditingController hostCtrl = TextEditingController();
   final TextEditingController configCtrl = TextEditingController();
@@ -57,14 +66,18 @@ class _HomeScreenState extends State<HomeScreen> {
         addLog("→ $state");
 
         setState(() {
-          statut = state;
-          estConnecte = state == "CONNECTED";
-          enCours = state == "CONNECTING";
-
-          if (state == "DISCONNECTED" || state == "STOPPED") {
+          if (state == "CONNECTED") {
+            statut = "kcorp vpn connecter";
+            estConnecte = true;
+            enCours = false;
+          } else if (state == "CONNECTING") {
+            statut = "CONNEXION...";
+            enCours = true;
+            estConnecte = false;
+          } else {
+            statut = "DÉCONNECTÉ";
             estConnecte = false;
             enCours = false;
-            statut = "DÉCONNECTÉ";
           }
         });
       },
@@ -73,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> initCore() async {
-    addLog("Démarrage du core Xray...");
+    addLog("Démarrage du core...");
     await v2ray.initializeV2Ray();
     try {
       final version = await v2ray.getCoreVersion();
@@ -93,6 +106,21 @@ class _HomeScreenState extends State<HomeScreen> {
         logScroll.jumpTo(logScroll.position.maxScrollExtent);
       }
     });
+  }
+
+  String get notificationName {
+    switch (modeSelectionne) {
+      case "UDP":
+        return "kčø4p UDP connected";
+      case "SlowDNS":
+        return "kčø4p SlowDNS connected";
+      case "SSH":
+        return "kčø4p SSH connected";
+      case "Trojan":
+        return "kčø4p Trojan connected";
+      default:
+        return "kčø4p VLESS connected";
+    }
   }
 
   String? buildFinalConfig(String raw, String host) {
@@ -128,7 +156,6 @@ class _HomeScreenState extends State<HomeScreen> {
           stream["httpSettings"]["host"] = [host];
           addLog("Host HTTP injecté: $host");
         }
-
         outbound["streamSettings"] = stream;
       }
 
@@ -160,6 +187,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    // Pour l'instant seuls VLESS/VMess/Trojan sont supportés
+    if (modeSelectionne == "UDP" || modeSelectionne == "SlowDNS" || modeSelectionne == "SSH") {
+      addLog("Mode $modeSelectionne pas encore disponible (demain)");
+      setState(() => statut = "MODE BIENTÔT DISPO");
+      return;
+    }
+
     final config = buildFinalConfig(raw, host);
     if (config == null) {
       setState(() => statut = "CONFIG INVALIDE");
@@ -172,7 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
       statut = "CONNEXION...";
     });
 
+    addLog("Mode: $modeSelectionne");
     addLog("Demande permission VPN...");
+
     try {
       final ok = await v2ray.requestPermission();
       if (!ok) {
@@ -186,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       addLog("Lancement du tunnel...");
       await v2ray.startV2Ray(
-        remark: host.isEmpty ? "KČØ4P" : "KČØ4P ($host)",
+        remark: notificationName,
         config: config,
         blockedApps: [],
       );
@@ -199,8 +235,39 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void exportConfig() {
+    final data = {
+      "mode": modeSelectionne,
+      "host": hostCtrl.text.trim(),
+      "config": configCtrl.text.trim(),
+    };
+    final jsonStr = jsonEncode(data);
+    Clipboard.setData(ClipboardData(text: jsonStr));
+    addLog("Configuration exportée (copiée)");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Configuration copiée dans le presse-papiers")),
+    );
+  }
+
+  void importConfig() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text == null) return;
+
+    try {
+      final map = jsonDecode(data!.text!);
+      setState(() {
+        modeSelectionne = map["mode"] ?? "VLESS / VMess";
+        hostCtrl.text = map["host"] ?? "";
+        configCtrl.text = map["config"] ?? "";
+      });
+      addLog("Configuration importée");
+    } catch (e) {
+      addLog("Import échoué");
+    }
+  }
+
   Color get couleur {
-    if (estConnecte) return const Color(0xFF10B981);
+    if (estConnecte) return const Color(0xFF10B981); // Vert
     if (enCours) return const Color(0xFFF59E0B);
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
@@ -224,49 +291,96 @@ class _HomeScreenState extends State<HomeScreen> {
         centerTitle: true,
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.group),
+            tooltip: "Groupe WhatsApp",
+            onPressed: () {
+              // Ouvre le lien WhatsApp
+              // Note: pour ouvrir vraiment le lien il faudra url_launcher plus tard
+              addLog("Groupe WhatsApp: https://chat.whatsapp.com/GtBg9UmAV0k0ZwyfA07NkX");
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
+              // Message + Dropdown Mode
+              const Text(
+                "Sélectionne le mode de configuration",
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: DropdownButton<String>(
+                  value: modeSelectionne,
+                  isExpanded: true,
+                  dropdownColor: const Color(0xFF1E293B),
+                  underline: const SizedBox(),
+                  style: const TextStyle(color: Colors.white),
+                  items: modes.map((m) {
+                    return DropdownMenuItem(value: m, child: Text(m));
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => modeSelectionne = value);
+                      addLog("Mode changé → $value");
+                    }
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
               // Statut
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   statut,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: couleur, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: estConnecte ? const Color(0xFF10B981) : couleur,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
-              // Bouton
+              // Bouton Power
               GestureDetector(
                 onTap: enCours ? null : toggle,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
-                  width: 150,
-                  height: 150,
+                  width: 140,
+                  height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFF1E293B),
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
-                      BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 28, spreadRadius: 5)
+                      BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 25, spreadRadius: 4)
                     ],
                   ),
-                  child: Icon(Icons.power_settings_new_rounded, size: 70, color: couleur),
+                  child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
                 ),
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
               // Host
               const Align(
@@ -287,12 +401,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
               // Configuration
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("CONFIGURATION (colle ton lien ici)", style: TextStyle(color: Colors.white60, fontSize: 12)),
+                child: Text("CONFIGURATION", style: TextStyle(color: Colors.white60, fontSize: 12)),
               ),
               const SizedBox(height: 5),
               TextField(
@@ -300,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxLines: 3,
                 style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
-                  hintText: "vless://... ou vmess://... ou JSON",
+                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
                   hintStyle: const TextStyle(color: Colors.white30),
                   filled: true,
                   fillColor: const Color(0xFF1E293B),
@@ -308,7 +422,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
+
+              // Boutons Import / Export
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: importConfig,
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text("Import"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E293B),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: exportConfig,
+                      icon: const Icon(Icons.upload, size: 18),
+                      label: const Text("Export"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E293B),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
 
               // Logs
               const Align(
@@ -334,6 +479,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+              ),
+
+              const SizedBox(height: 8),
+              const Text(
+                "DEV : kcørp tech serf",
+                style: TextStyle(color: Colors.white38, fontSize: 11),
               ),
             ],
           ),
