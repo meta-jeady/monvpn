@@ -1,11 +1,21 @@
 name: kco4p_vpn
-description: Application VPN Professionnelle KČØ4P complète et fonctionnelle.
+description: Application VPN Professionnelle KČØ4P - Client V2Ray/VLESS
+publish_to: 'none'
 version: 1.0.0+1
+
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.1.0 <4.0.0'
+
 dependencies:
   flutter:
     sdk: flutter
-  flutter_v2ray: ^1.2.5
+  flutter_v2ray: ^1.0.10
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
 flutter:
   uses-material-design: true
