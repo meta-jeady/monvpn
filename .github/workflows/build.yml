@@ -25,10 +25,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Clean and regenerate Android folder
+      # ON NE SUPPRIME PLUS ANDROID - ON GARDE TON MANIFEST
+      - name: Restore Android files if deleted
         run: |
-          rm -rf android
-          flutter create . --org com.kco4p --project-name kco4p_vpn --platforms=android
+          if [ ! -f "android/app/src/main/AndroidManifest.xml" ]; then
+            flutter create . --org com.kco4p --project-name kco4p_vpn --platforms=android
+          fi
 
       - name: Install dependencies
         run: flutter pub get
