@@ -25,13 +25,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Clean and regenerate Android folder
-        run: |
-          rm -rf android
-          flutter create . --org com.kco4p --project-name kco4p_vpn --platforms=android
-
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze --no-fatal-infos
 
       - name: Build APK (Release)
         run: flutter build apk --release
