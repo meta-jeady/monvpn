@@ -1,0 +1,36 @@
+<manifest xmlns:android="http://android.com"
+    package="com.example.kco4p_vpn">
+    
+    <!-- Permissions obligatoires pour le fonctionnement du VPN -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <application
+        android:label="KČØ4P VPN"
+        android:icon="@mipmap/ic_launcher"
+        android:hardwareAccelerated="true">
+        
+        <!-- Activité principale de l'application Flutter -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|locale|layoutDirection|fontScale"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            
+            <!-- Déclare cette vue comme l'écran de démarrage par défaut -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        
+        <!-- Balise requise par le framework Flutter pour charger son moteur -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>
