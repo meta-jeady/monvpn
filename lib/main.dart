@@ -130,8 +130,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get hostRequis {
     return modeSelectionne == "VLESS / VMess" ||
-           modeSelectionne == "Trojan" ||
-           modeSelectionne == "SlowDNS";
+        modeSelectionne == "Trojan" ||
+        modeSelectionne == "SlowDNS";
   }
 
   Map<String, String>? parseUdpSsh(String raw) {
@@ -197,19 +197,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
         addLog("Config ${modeSelectionne}: ${data['ip']}:${data['port']}");
         final json = {
-          "outbounds": [{
-            "protocol": "socks",
-            "settings": {
-              "servers": [{
-                "address": data['ip'],
-                "port": int.parse(data['port']!),
-                "users": [{
-                  "user": data['username'],
-                  "pass": data['password']
-                }]
-              }]
+          "outbounds": [
+            {
+              "protocol": "socks",
+              "settings": {
+                "servers": [
+                  {
+                    "address": data['ip'],
+                    "port": int.parse(data['port']!),
+                    "users": [
+                      {
+                        "user": data['username'],
+                        "pass": data['password']
+                      }
+                    ]
+                  }
+                ]
+              }
             }
-          }]
+          ]
         };
         return jsonEncode(json);
       }
@@ -361,8 +367,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // SUPPRIMÉ: _launchWhatsApp() - ton code n'avait pas ça
-
   Color get couleur {
     if (estConnecte) return const Color(0xFF10B981);
     if (enCours) return const Color(0xFFF59E0B);
@@ -444,9 +448,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
-
               const SizedBox(height: 14),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -464,9 +466,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               GestureDetector(
                 onTap: enCours? null : toggle,
                 child: AnimatedContainer(
@@ -482,16 +482,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   child: enCours
-                   ? const CircularProgressIndicator(
+                     ? const CircularProgressIndicator(
                           color: Color(0xFFF59E0B),
                           strokeWidth: 3,
                         )
                       : Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Align(
                 alignment: Alignment.centerLeft,
                 child: Row(
@@ -523,7 +521,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                       color: (hostRequis && hostCtrl.text.isEmpty)
-                       ? const Color(0xFFEF4444)
+                         ? const Color(0xFFEF4444)
                           : Colors.transparent,
                       width: 2,
                     ),
@@ -532,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                       color: (hostRequis && hostCtrl.text.isEmpty)
-                       ? const Color(0xFFEF4444)
+                         ? const Color(0xFFEF4444)
                           : Colors.transparent,
                       width: 2,
                     ),
@@ -541,7 +539,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                       color: (hostRequis && hostCtrl.text.isEmpty)
-                       ? const Color(0xFFEF4444)
+                         ? const Color(0xFFEF4444)
                           : const Color(0xFF10B981),
                       width: 2,
                     ),
@@ -550,9 +548,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 onChanged: (v) => setState(() {}),
               ),
-
               const SizedBox(height: 10),
-
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
@@ -570,9 +566,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
-
               const SizedBox(height: 10),
-
               Row(
                 children: [
                   Expanded(
@@ -599,8 +593,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
-
+              ),
+              const SizedBox(height: 10),
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text("LOGS", style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -618,7 +612,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: logs.isEmpty
-                    ? const Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+                     ? const Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
                         : ListView.builder(
                             controller: logScroll,
                             itemCount: logs.length > 3? 3 : logs.length,
