@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build KČØ4P VPN APK
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,20 +26,15 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Clean and regenerate Android folder
-        run: |
-          rm -rf android
-          flutter create . --org com.kco4p --project-name kco4p_vpn --platforms=android
-
-      - name: Install dependencies
+      - name: Get dependencies
         run: flutter pub get
 
       - name: Build APK (Release)
         run: flutter build apk --release
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: kco4p-vpn-release
+          name: KCO4P-VPN-Release
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
