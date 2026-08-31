@@ -19,8 +19,8 @@ class Kco4pVPNApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'KČØ4P VPN',
-      theme: ThemeData.light().copyWith( // ← CHANGE 1: light au lieu de dark
-        scaffoldBackgroundColor: Colors.white, // ← CHANGE 2: blanc au lieu de 0xFF0B1220
+      theme: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: Colors.white,
       ),
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
@@ -63,21 +63,30 @@ class _HomeScreenState extends State<HomeScreen> {
       onStatusChanged: (status) {
         if (!mounted) return;
         final state = status.state.toUpperCase();
-        addLog("→ $state");
 
         setState(() {
           if (state == "CONNECTED") {
-            statut = "FREE SERF"; // ← CHANGE 3: FREE SERF
-            estConnecte = true;
-            enCours = false;
+            // ← FIX: évite les doublons
+            if (statut!= "CONNETED") {
+              addLog("→ ready to use"); // ← CHANGÉ: ready to use
+              statut = "FREE SERF";
+              estConnecte = true;
+              enCours = false;
+            }
           } else if (state == "CONNECTING") {
-            statut = "CONNEXION...";
-            enCours = true;
-            estConnecte = false;
+            if (statut!= "CONNEXION...") { // ← FIX: évite doublons
+              addLog("→ CONNECTING");
+              statut = "CONNEXION...";
+              enCours = true;
+              estConnecte = false;
+            }
           } else {
-            statut = "DÉCONNECTÉ";
-            estConnecte = false;
-            enCours = false;
+            if (statut!= "DÉCONNECTÉ") { // ← FIX: évite doublons
+              addLog("→ DISCONNECTED");
+              statut = "DÉCONNECTÉ";
+              estConnecte = false;
+              enCours = false;
+            }
           }
         });
       },
@@ -131,8 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-        !raw.startsWith("vmess://") &&
-        !raw.startsWith("trojan://")) {
+      !raw.startsWith("vmess://") &&
+      !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -285,17 +294,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // ← CHANGE 4: fond blanc
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        backgroundColor: Colors.white, // ← CHANGE 5: appbar blanc
+        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.article), // ← CHANGE 6: icône logs
+            icon: const Icon(Icons.article),
             tooltip: "Logs",
-            onPressed: () { // ← CHANGE 7: ouvre 2ème écran
+            onPressed: () {
               Navigator.push(context, MaterialPageRoute(
                 builder: (context) => LogsScreen(logs: logs)
               ));
@@ -310,21 +319,21 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.black87, fontSize: 13), // ← CHANGE 8
+                style: TextStyle(color: Colors.black87, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100], // ← CHANGE 9: gris clair au lieu de 0xFF1E293B
+                  color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
-                  dropdownColor: Colors.white, // ← CHANGE 10
+                  dropdownColor: Colors.white,
                   underline: const SizedBox(),
-                  style: const TextStyle(color: Colors.black), // ← CHANGE 11
+                  style: const TextStyle(color: Colors.black),
                   items: modes.map((m) {
                     return DropdownMenuItem(value: m, child: Text(m));
                   }).toList(),
@@ -343,16 +352,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100], // ← CHANGE 12
+                  color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   statut,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: estConnecte? Colors.green : couleur, // ← CHANGE 13: vert
-                    fontSize: 18, // ← CHANGE 14: plus gros
-                    fontWeight: FontWeight.bold, // ← CHANGE 15: gras
+                    color: estConnecte? Colors.green : couleur,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
@@ -367,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.grey[100], // ← CHANGE 16
+                    color: Colors.grey[100],
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
                       BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 25, spreadRadius: 4)
@@ -381,17 +390,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)), // ← CHANGE 17
+                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
               ),
               const SizedBox(height: 5),
               TextField(
                 controller: hostCtrl,
-                style: const TextStyle(color: Colors.black), // ← CHANGE 18
+                style: const TextStyle(color: Colors.black),
                 decoration: InputDecoration(
                   hintText: "Exemple: yamo.mtn.cm",
-                  hintStyle: const TextStyle(color: Colors.black38), // ← CHANGE 19
+                  hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
-                  fillColor: Colors.grey[100], // ← CHANGE 20
+                  fillColor: Colors.grey[100],
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
@@ -401,18 +410,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)), // ← CHANGE 21
+                child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
               ),
               const SizedBox(height: 5),
               TextField(
                 controller: configCtrl,
                 maxLines: 3,
-                style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'), // ← CHANGE 22
+                style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-                  hintStyle: const TextStyle(color: Colors.black38), // ← CHANGE 23
+                  hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
-                  fillColor: Colors.grey[100], // ← CHANGE 24
+                  fillColor: Colors.grey[100],
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
@@ -427,8 +436,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.download, size: 18),
                       label: const Text("Import"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[200], // ← CHANGE 25
-                        foregroundColor: Colors.black, // ← CHANGE 26
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
                       ),
                     ),
                   ),
@@ -439,21 +448,54 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.upload, size: 18),
                       label: const Text("Export"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[200], // ← CHANGE 27
-                        foregroundColor: Colors.black, // ← CHANGE 28
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
                       ),
                     ),
                   ),
                 ],
               ),
 
-              // ← SUPPRIMÉ: Bloc logs d'ici - maintenant sur écran séparé
+              const SizedBox(height: 10),
 
-              const Spacer(), // ← AJOUTÉ: pour pousser le texte en bas
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("LOGS", style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 5),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (context) => LogsScreen(logs: logs)
+                    ));
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: logs.isEmpty
+                   ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+                      : ListView.builder(
+                          controller: logScroll,
+                          itemCount: logs.length > 3? 3 : logs.length,
+                          itemBuilder: (_, i) => Text(
+                            logs[logs.length - 1 - i],
+                            style: const TextStyle(color: Colors.black54, fontSize: 11, fontFamily: 'monospace'),
+                          ),
+                        ),
+                  ),
+                ),
+              ),
 
+              const SizedBox(height: 8),
               const Text(
                 "DEV : kcørp tech serf",
-                style: TextStyle(color: Colors.black38, fontSize: 11), // ← CHANGE 29
+                style: TextStyle(color: Colors.black38, fontSize: 11),
               ),
             ],
           ),
@@ -463,10 +505,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ← NOUVEAU: ÉCRAN 2 - LOGS SÉPARÉ
+// ÉCRAN 2 - LOGS AVEC TRAITS FINS + COULEURS
 class LogsScreen extends StatelessWidget {
   final List<String> logs;
   const LogsScreen({super.key, required this.logs});
+
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use")) return Colors.green; // ← VERT
+    if (log.contains("Failed") || log.contains("Erreur") || log.contains("Échec")) return Colors.red;
+    if (log.contains("CONNECTING")) return Colors.orange;
+    if (log.contains("stopped") || log.contains("Déconnecté")) return Colors.amber;
+    return Colors.black87;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -475,15 +525,26 @@ class LogsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Logs'),
         backgroundColor: Colors.white,
+        elevation: 0,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
+      body: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: logs.length,
+        separatorBuilder: (context, index) => Divider( // ← TRAIT FIN
+          height: 1,
+          thickness: 0.5,
+          color: Colors.grey[300],
+        ),
         itemBuilder: (context, index) => Padding(
-          padding: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
             logs[index],
-            style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+            style: TextStyle(
+              fontSize: 11,
+              fontFamily: 'monospace',
+              color: _getLogColor(logs[index]), // ← COULEUR AUTO
+              fontWeight: logs[index].contains("ready to use")? FontWeight.bold : FontWeight.normal, // ← GRAS
+            ),
           ),
         ),
       ),
