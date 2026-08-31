@@ -28,10 +28,7 @@ class Kco4pVPNApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
-          primary: const Color(0xFF2563EB),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
       ),
       home: const HomeScreen(),
     );
@@ -64,7 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController hostCtrl = TextEditingController();
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
-  final ScrollController logScroll = ScrollController();
 
   @override
   void initState() {
@@ -112,11 +108,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final time = DateTime.now().toString().substring(11, 19);
     setState(() {
       logs.add("[$time] $msg");
-    });
-    Future.delayed(const Duration(milliseconds: 80), () {
-      if (logScroll.hasClients) {
-        logScroll.jumpTo(logScroll.position.maxScrollExtent);
-      }
     });
   }
 
@@ -246,7 +237,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==================== IMPORT ====================
   Future<void> importConfig() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -262,14 +252,12 @@ class _HomeScreenState extends State<HomeScreen> {
       final file = File(result.files.single.path!);
       String content = await file.readAsString();
 
-      // Décodage si le fichier est verrouillé
       if (content.startsWith("KCO4P_LOCKED:")) {
         content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
       }
 
       final map = jsonDecode(content);
 
-      // Vérification date d'expiration
       if (map["expire_date"] != null) {
         final expire = DateTime.tryParse(map["expire_date"]);
         if (expire != null && DateTime.now().isAfter(expire)) {
@@ -306,7 +294,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     hostCtrl.dispose();
     configCtrl.dispose();
-    logScroll.dispose();
     super.dispose();
   }
 
@@ -360,10 +347,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
-
               const SizedBox(height: 14),
-
-              // Statut
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -382,10 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 18),
-
-              // Bouton Power
               GestureDetector(
                 onTap: enCours ? null : toggle,
                 child: AnimatedContainer(
@@ -397,42 +378,47 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.white,
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
-                      BoxShadow(
-                        color: couleur.withOpacity(0.25),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      )
+                      BoxShadow(color: couleur.withOpacity(0.25), blurRadius: 20, spreadRadius: 2)
                     ],
                   ),
                   child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
                 ),
               ),
-
               const SizedBox(height: 18),
-
-              // Host
-              _buildLabel("HOST (domaine de ton pays)"),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
+              ),
               const SizedBox(height: 6),
               TextField(
                 controller: hostCtrl,
-                decoration: _inputDecoration("Exemple: yamo.mtn.cm"),
+                decoration: InputDecoration(
+                  hintText: "Exemple: yamo.mtn.cm",
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                ),
               ),
-
               const SizedBox(height: 12),
-
-              // Configuration
-              _buildLabel("CONFIGURATION"),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
+              ),
               const SizedBox(height: 6),
               TextField(
                 controller: configCtrl,
                 maxLines: 3,
                 style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                decoration: _inputDecoration("Colle ton lien vless:// ou vmess:// ou JSON"),
+                decoration: InputDecoration(
+                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                ),
               ),
-
               const SizedBox(height: 14),
-
-              // Boutons Import / Export
               Row(
                 children: [
                   Expanded(
@@ -475,40 +461,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-
               const Spacer(),
-              const Text(
-                "DEV : kcørp tech serf",
-                style: TextStyle(color: Colors.black38, fontSize: 12),
-              ),
+              const Text("DEV : kcørp tech serf", style: TextStyle(color: Colors.black38, fontSize: 12)),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildLabel(String text) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(text, style: const TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.w500)),
-    );
-  }
-
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade200),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade200),
       ),
     );
   }
@@ -558,7 +515,6 @@ class _ExportPageState extends State<ExportPage> {
 
     String content = const JsonEncoder.withIndent('  ').convert(data);
 
-    // Verrouillage (encodage)
     if (lockConfig) {
       content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
     }
@@ -599,15 +555,9 @@ class _ExportPageState extends State<ExportPage> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // Lock Config
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
               child: SwitchListTile(
                 title: const Text("Lock config", style: TextStyle(fontWeight: FontWeight.w500)),
                 subtitle: const Text("Configuration verrouillée (recommandé)"),
@@ -616,22 +566,13 @@ class _ExportPageState extends State<ExportPage> {
                 onChanged: (v) => setState(() => lockConfig = v),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Date expiration
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
               child: Column(
                 children: [
                   SwitchListTile(
-                    title: const Text(
-                      "Date d'expiration",
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
+                    title: const Text("Date d'expiration", style: TextStyle(fontWeight: FontWeight.w500)),
                     value: hasExpire,
                     activeColor: const Color(0xFF2563EB),
                     onChanged: (v) => setState(() => hasExpire = v),
@@ -651,15 +592,12 @@ class _ExportPageState extends State<ExportPage> {
                           firstDate: DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
                         );
-                        if (picked != null) {
-                          setState(() => expireDate = picked);
-                        }
+                        if (picked != null) setState(() => expireDate = picked);
                       },
                     ),
                 ],
               ),
             ),
-
             const Spacer(),
 
             SizedBox(
@@ -683,6 +621,62 @@ class _ExportPageState extends State<ExportPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ==================== PAGE LOGS ====================
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+  const LogsScreen({super.key, required this.logs});
+
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use")) return Colors.green;
+    if (log.contains("Erreur") || log.contains("Échec") || log.contains("Failed")) {
+      return Colors.red;
+    }
+    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
+      return Colors.orange;
+    }
+    return Colors.black87;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Logs"),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: logs.isEmpty
+          ? const Center(child: Text("Aucun log pour le moment"))
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: logs.length,
+              separatorBuilder: (_, __) => Divider(
+                color: Colors.grey.shade200,
+                height: 1,
+              ),
+              itemBuilder: (_, i) {
+                final log = logs[i];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    log,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: _getLogColor(log),
+                      fontWeight: log.contains("ready to use")
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
