@@ -18,14 +18,9 @@ class Kco4pVPNApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KČØ4P VPN',
+      title: 'V2rayv2',
       theme: ThemeData.light().copyWith(
         scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
       ),
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
@@ -68,21 +63,30 @@ class _HomeScreenState extends State<HomeScreen> {
       onStatusChanged: (status) {
         if (!mounted) return;
         final state = status.state.toUpperCase();
-        addLog("→ $state");
 
         setState(() {
           if (state == "CONNECTED") {
-            statut = "FREE SERF";
-            estConnecte = true;
-            enCours = false;
+            // ← FIX: évite les doublons
+            if (statut!= "CONNECTED") {
+              addLog("→ ready to use"); // ← CHANGÉ: ready to use
+              statut = "CONNECTED";
+              estConnecte = true;
+              enCours = false;
+            }
           } else if (state == "CONNECTING") {
-            statut = "CONNEXION...";
-            enCours = true;
-            estConnecte = false;
+            if (statut!= "CONNEXION...") { // ← FIX: évite doublons
+              addLog("→ CONNECTING");
+              statut = "CONNEXION...";
+              enCours = true;
+              estConnecte = false;
+            }
           } else {
-            statut = "DÉCONNECTÉ";
-            estConnecte = false;
-            enCours = false;
+            if (statut!= "DÉCONNECTÉ") { // ← FIX: évite doublons
+              addLog("→ DISCONNECTED");
+              statut = "DÉCONNECTÉ";
+              estConnecte = false;
+              enCours = false;
+            }
           }
         });
       },
@@ -116,34 +120,16 @@ class _HomeScreenState extends State<HomeScreen> {
   String get notificationName {
     switch (modeSelectionne) {
       case "UDP":
-        return "kčø4p UDP connected";
+        return " UDP connected";
       case "SlowDNS":
-        return "kčø4p SlowDNS connected";
+        return " SlowDNS connected";
       case "SSH":
-        return "kčø4p SSH connected";
+        return " SSH connected";
       case "Trojan":
-        return "kčø4p Trojan connected";
+        return "v2ray Trojan connected";
       default:
-        return "kčø4p VLESS connected";
+        return "v2ray VLESS connected";
     }
-  }
-
-  bool get hostRequis {
-    return modeSelectionne == "VLESS / VMess" ||
-        modeSelectionne == "Trojan" ||
-        modeSelectionne == "SlowDNS";
-  }
-
-  Map<String, String>? parseUdpSsh(String raw) {
-    final regex = RegExp(r'^(.+):(\d+)@(.+):(.+)$');
-    final match = regex.firstMatch(raw.trim());
-    if (match == null) return null;
-    return {
-      'ip': match.group(1)!,
-      'port': match.group(2)!,
-      'username': match.group(3)!,
-      'password': match.group(4)!,
-    };
   }
 
   String? buildFinalConfig(String raw, String host) {
@@ -153,103 +139,38 @@ class _HomeScreenState extends State<HomeScreen> {
         return raw.trim();
       }
 
-      if (raw.startsWith("vless://") || raw.startsWith("vmess://") || raw.startsWith("trojan://")) {
-        addLog("Transformation du lien...");
-        final parser = FlutterV2ray.parseFromURL(raw.trim());
-        final full = parser.getFullConfiguration();
-        final Map<String, dynamic> json = jsonDecode(full);
-
-        if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
-          final outbound = json["outbounds"][0];
-          final stream = outbound["streamSettings"]?? {};
-          final network = stream["network"]?? "ws";
-
-          if (network == "ws") {
-            stream["wsSettings"]??= {};
-            stream["wsSettings"]["headers"]??= {};
-            stream["wsSettings"]["headers"]["Host"] = host;
-            addLog("Host WS injecté: $host");
-          } else if (network == "http" || network == "h2") {
-            stream["httpSettings"]??= {};
-            stream["httpSettings"]["host"] = [host];
-            addLog("Host HTTP injecté: $host");
-          } else if (network == "tcp" && stream["security"] == "tls") {
-            stream["tlsSettings"]??= {};
-            stream["tlsSettings"]["serverName"] = host;
-            addLog("SNI TLS injecté: $host");
-          } else if (network == "grpc") {
-            stream["grpcSettings"]??= {};
-            stream["grpcSettings"]["serviceName"] = host;
-            addLog("SNI gRPC injecté: $host");
-          }
-          outbound["streamSettings"] = stream;
-        }
-
-        return jsonEncode(json);
+      if (!raw.startsWith("vless://") &&
+      !raw.startsWith("vmess://") &&
+      !raw.startsWith("trojan://")) {
+        return null;
       }
 
-      if (modeSelectionne == "UDP" || modeSelectionne == "SSH") {
-        final data = parseUdpSsh(raw);
-        if (data == null) {
-          addLog("Format invalide. Ex: 192.168.1.1:1080@user:pass");
-          return null;
-        }
+      addLog("Transformation du lien...");
+      final parser = FlutterV2ray.parseFromURL(raw.trim());
+      final full = parser.getFullConfiguration();
+      final Map<String, dynamic> json = jsonDecode(full);
 
-        addLog("Config ${modeSelectionne}: ${data['ip']}:${data['port']}");
-        final json = {
-          "outbounds": [
-            {
-              "protocol": "socks",
-              "settings": {
-                "servers": [
-                  {
-                    "address": data['ip'],
-                    "port": int.parse(data['port']!),
-                    "users": [
-                      {
-                        "user": data['username'],
-                        "pass": data['password']
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          ]
-        };
-        return jsonEncode(json);
+      if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
+        final outbound = json["outbounds"][0];
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
+
+        if (network == "ws") {
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
+          stream["wsSettings"]["headers"]["Host"] = host;
+          addLog("Host injecté: $host");
+        } else if (network == "http" || network == "h2") {
+          stream["httpSettings"]??= {};
+          stream["httpSettings"]["host"] = [host];
+          addLog("Host HTTP injecté: $host");
+        }
+        outbound["streamSettings"] = stream;
       }
 
-      if (modeSelectionne == "SlowDNS") {
-        if (raw.startsWith("vless://") || raw.startsWith("vmess://")) {
-          final parser = FlutterV2ray.parseFromURL(raw.trim());
-          final full = parser.getFullConfiguration();
-          final Map<String, dynamic> json = jsonDecode(full);
-
-          if (json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
-            final outbound = json["outbounds"][0];
-            if (outbound["port"] == null) {
-              outbound["port"] = 53;
-            }
-          }
-
-          if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
-            final outbound = json["outbounds"][0];
-            final stream = outbound["streamSettings"]?? {};
-            stream["wsSettings"]??= {};
-            stream["wsSettings"]["headers"]??= {};
-            stream["wsSettings"]["headers"]["Host"] = host;
-            outbound["streamSettings"] = stream;
-            addLog("Host SlowDNS injecté: $host");
-          }
-
-          return jsonEncode(json);
-        }
-      }
-
-      return null;
+      return jsonEncode(json);
     } catch (e) {
-      addLog("Erreur build: $e");
+      addLog("Erreur: $e");
       return null;
     }
   }
@@ -275,15 +196,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (hostRequis && host.isEmpty) {
-      addLog("ERREUR: Host requis pour $modeSelectionne");
-      setState(() => statut = "HOST MANQUANT");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Mets le Host de ton pays d'abord!"),
-          backgroundColor: Color(0xFFEF4444),
-        ),
-      );
+    if (modeSelectionne == "UDP" || modeSelectionne == "SlowDNS" || modeSelectionne == "SSH") {
+      addLog("Mode $modeSelectionne pas encore disponible (demain)");
+      setState(() => statut = "MODE BIENTÔT DISPO");
       return;
     }
 
@@ -300,7 +215,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     addLog("Mode: $modeSelectionne");
-    if (host.isNotEmpty) addLog("Host: $host");
     addLog("Demande permission VPN...");
 
     try {
@@ -337,9 +251,9 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     final jsonStr = jsonEncode(data);
     Clipboard.setData(ClipboardData(text: jsonStr));
-    addLog("Configuration exportée");
+    addLog("Configuration exportée (copiée)");
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Configuration copiée")),
+      const SnackBar(content: Text("Configuration copiée dans le presse-papiers")),
     );
   }
 
@@ -356,38 +270,17 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       addLog("Configuration importée");
     } catch (e) {
-      addLog("Import échoué - format invalide");
+      addLog("Import échoué");
     }
-  }
-
-  void _openLogsScreen() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => LogsScreen(logs: logs)),
-    );
   }
 
   Color get couleur {
     if (estConnecte) return const Color(0xFF10B981);
     if (enCours) return const Color(0xFFF59E0B);
-    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC") || statut.contains("MANQUANT")) {
+    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
     }
     return const Color(0xFFEF4444);
-  }
-
-  String get hintConfig {
-    switch (modeSelectionne) {
-      case "UDP":
-      case "SSH":
-        return "Exemple: 192.168.1.1:1080@user:pass";
-      case "SlowDNS":
-        return "Colle ton lien vless:// ou config SlowDNS";
-      case "Trojan":
-        return "Colle ton lien trojan://";
-      default:
-        return "Colle ton lien vless:// ou vmess:// ou JSON";
-    }
   }
 
   @override
@@ -403,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("V2rayv2", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -411,7 +304,11 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.article),
             tooltip: "Logs",
-            onPressed: _openLogsScreen,
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (context) => LogsScreen(logs: logs)
+              ));
+            },
           ),
         ],
       ),
@@ -448,7 +345,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
+
               const SizedBox(height: 14),
+
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -466,7 +365,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 16),
+
               GestureDetector(
                 onTap: enCours? null : toggle,
                 child: AnimatedContainer(
@@ -481,32 +382,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 25, spreadRadius: 4)
                     ],
                   ),
-                  child: enCours
-                     ? const CircularProgressIndicator(
-                          color: Color(0xFFF59E0B),
-                          strokeWidth: 3,
-                        )
-                      : Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
+                  child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
                 ),
               ),
+
               const SizedBox(height: 16),
-              Align(
+
+              const Align(
                 alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    if (hostRequis)
-                      const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 14),
-                    if (hostRequis) const SizedBox(width: 4),
-                    Text(
-                      hostRequis? "HOST (Obligatoire)" : "HOST (Optionnel)",
-                      style: TextStyle(
-                        color: hostRequis? const Color(0xFFEF4444) : Colors.black54,
-                        fontSize: 12,
-                        fontWeight: hostRequis? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
+                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
               ),
               const SizedBox(height: 5),
               TextField(
@@ -517,38 +401,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
                   fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                      color: (hostRequis && hostCtrl.text.isEmpty)
-                         ? const Color(0xFFEF4444)
-                          : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                      color: (hostRequis && hostCtrl.text.isEmpty)
-                         ? const Color(0xFFEF4444)
-                          : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                      color: (hostRequis && hostCtrl.text.isEmpty)
-                         ? const Color(0xFFEF4444)
-                          : const Color(0xFF10B981),
-                      width: 2,
-                    ),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
-                onChanged: (v) => setState(() {}),
               ),
+
               const SizedBox(height: 10),
+
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
@@ -559,14 +418,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxLines: 3,
                 style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
-                  hintText: hintConfig,
+                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
                   hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
                   fillColor: Colors.grey[100],
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
+
               const SizedBox(height: 10),
+
               Row(
                 children: [
                   Expanded(
@@ -594,7 +455,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 10),
+
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text("LOGS", style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -602,7 +465,11 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 5),
               Expanded(
                 child: GestureDetector(
-                  onTap: _openLogsScreen,
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (context) => LogsScreen(logs: logs)
+                    ));
+                  },
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
@@ -612,15 +479,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: logs.isEmpty
-                     ? const Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
-                        : ListView.builder(
-                            controller: logScroll,
-                            itemCount: logs.length > 3? 3 : logs.length,
-                            itemBuilder: (_, i) => Text(
-                              logs[logs.length - 1 - i],
-                              style: const TextStyle(color: Colors.black54, fontSize: 11, fontFamily: 'monospace'),
-                            ),
+                   ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+                      : ListView.builder(
+                          controller: logScroll,
+                          itemCount: logs.length > 3? 3 : logs.length,
+                          itemBuilder: (_, i) => Text(
+                            logs[logs.length - 1 - i],
+                            style: const TextStyle(color: Colors.black54, fontSize: 11, fontFamily: 'monospace'),
                           ),
+                        ),
                   ),
                 ),
               ),
@@ -638,10 +505,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// ÉCRAN 2 - LOGS AVEC TRAITS FINS + COULEURS
 class LogsScreen extends StatelessWidget {
   final List<String> logs;
-
   const LogsScreen({super.key, required this.logs});
+
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use")) return Colors.green; // ← VERT
+    if (log.contains("Failed") || log.contains("Erreur") || log.contains("Échec")) return Colors.red;
+    if (log.contains("CONNECTING")) return Colors.orange;
+    if (log.contains("stopped") || log.contains("Déconnecté")) return Colors.amber;
+    return Colors.black87;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -650,24 +525,28 @@ class LogsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Logs'),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        elevation: 0,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
+      body: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: logs.length,
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: SelectableText(
-              logs[index],
-              style: const TextStyle(
-                color: Colors.black87,
-                fontSize: 11,
-                fontFamily: 'monospace',
-              ),
+        separatorBuilder: (context, index) => Divider( // ← TRAIT FIN
+          height: 1,
+          thickness: 0.5,
+          color: Colors.grey[300],
+        ),
+        itemBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            logs[index],
+            style: TextStyle(
+              fontSize: 11,
+              fontFamily: 'monospace',
+              color: _getLogColor(logs[index]), // ← COULEUR AUTO
+              fontWeight: logs[index].contains("ready to use")? FontWeight.bold : FontWeight.normal, // ← GRAS
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
