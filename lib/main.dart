@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,11 @@ class Kco4pVPNApp extends StatelessWidget {
       title: 'KČØ4P VPN',
       theme: ThemeData.light().copyWith(
         scaffoldBackgroundColor: Colors.white,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+        ),
       ),
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
@@ -37,20 +43,25 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late FlutterV2ray v2ray;
+
   String statut = "DÉCONNECTÉ";
   bool estConnecte = false;
   bool enCours = false;
   String modeSelectionne = "VLESS / VMess";
-  final List<String> logs = [];
-  final ScrollController logScroll = ScrollController();
 
+  // ← CHANGÉ: Ajout du libellé pour UDP
   final List<String> modes = [
     "VLESS / VMess",
-    "UDP",
+    "Configuration du mode UDP", // ← CHANGÉ
     "SlowDNS",
     "SSH",
     "Trojan",
   ];
+
+  final TextEditingController hostCtrl = TextEditingController();
+  final TextEditingController configCtrl = TextEditingController();
+  final List<String> logs = [];
+  final ScrollController logScroll = ScrollController();
 
   @override
   void initState() {
@@ -59,28 +70,21 @@ class _HomeScreenState extends State<HomeScreen> {
       onStatusChanged: (status) {
         if (!mounted) return;
         final state = status.state.toUpperCase();
+        addLog("→ $state");
+
         setState(() {
           if (state == "CONNECTED") {
-            if (statut!= "FREE SERF") {
-              addLog("→ ready to use");
-              statut = "FREE SERF";
-              estConnecte = true;
-              enCours = false;
-            }
+            statut = "FREE SERF";
+            estConnecte = true;
+            enCours = false;
           } else if (state == "CONNECTING") {
-            if (statut!= "CONNEXION...") {
-              addLog("→ CONNECTING");
-              statut = "CONNEXION...";
-              enCours = true;
-              estConnecte = false;
-            }
+            statut = "CONNEXION...";
+            enCours = true;
+            estConnecte = false;
           } else {
-            if (statut!= "DÉCONNECTÉ") {
-              addLog("→ DISCONNECTED");
-              statut = "DÉCONNECTÉ";
-              estConnecte = false;
-              enCours = false;
-            }
+            statut = "DÉCONNECTÉ";
+            estConnecte = false;
+            enCours = false;
           }
         });
       },
@@ -91,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> initCore() async {
     addLog("Démarrage du core...");
     await v2ray.initializeV2Ray();
+    if (!mounted) return;
     try {
       final version = await v2ray.getCoreVersion();
       addLog("Core prêt - Xray $version");
@@ -100,15 +105,243 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void addLog(String msg) {
+    if (!mounted) return;
     final time = DateTime.now().toString().substring(11, 19);
     setState(() {
       logs.add("[$time] $msg");
     });
-    Future.delayed(const Duration(milliseconds: 80), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (logScroll.hasClients) {
         logScroll.jumpTo(logScroll.position.maxScrollExtent);
       }
     });
+  }
+
+  String get notificationName {
+    switch (modeSelectionne) {
+      case "Configuration du mode UDP":
+        return "kčø4p UDP connected";
+      case "SlowDNS":
+        return "kčø4p SlowDNS connected";
+      case "SSH":
+        return "kčø4p SSH connected";
+      case "Trojan":
+        return "kčø4p Trojan connected";
+      default:
+        return "kčø4p VLESS connected";
+    }
+  }
+
+  // ← NOUVEAU: Parse le format ip:port@username:password pour UDP
+  Map<String, String>? parseUdpConfig(String raw) {
+    final regex = RegExp(r'^(.+):(\d+)@(.+):(.+)$');
+    final match = regex.firstMatch(raw.trim());
+    if (match == null) return null;
+    return {
+      'ip': match.group(1)!,
+      'port': match.group(2)!,
+      'username': match.group(3)!,
+      'password': match.group(4)!,
+    };
+  }
+
+  String? buildFinalConfig(String raw, String host) {
+    try {
+      // ← NOUVEAU: Gestion UDP
+      if (modeSelectionne == "Configuration du mode UDP") {
+        final udpData = parseUdpConfig(raw);
+        if (udpData == null) {
+          addLog("Format UDP invalide. Utilise: ip:port@username:password");
+          return null;
+        }
+        addLog("Config UDP: ${udpData['ip']}:${udpData['port']}");
+
+        // Template V2Ray pour UDP/SOCKS
+        final json = {
+          "outbounds": [
+            {
+              "protocol": "socks",
+              "settings": {
+                "servers": [
+                  {
+                    "address": udpData['ip'],
+                    "port": int.parse(udpData['port']!),
+                    "users": [
+                      {
+                        "user": udpData['username'],
+                        "pass": udpData['password']
+                      }
+                    ]
+                  }
+                ]
+              },
+              "streamSettings": {
+                "network": "tcp" // ou "udp" selon ton serveur
+              }
+            }
+          ]
+        };
+        return jsonEncode(json);
+      }
+
+      // Ancien code VLESS/VMess/Trojan
+      if (raw.trim().startsWith("{")) {
+        addLog("JSON détecté");
+        return raw.trim();
+      }
+
+      if (!raw.startsWith("vless://") &&
+         !raw.startsWith("vmess://") &&
+         !raw.startsWith("trojan://")) {
+        return null;
+      }
+
+      addLog("Transformation du lien...");
+      final parser = FlutterV2ray.parseFromURL(raw.trim());
+      final full = parser.getFullConfiguration();
+      final Map<String, dynamic> json = jsonDecode(full);
+
+      if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
+        final outbound = json["outbounds"][0];
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
+
+        if (network == "ws") {
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
+          stream["wsSettings"]["headers"]["Host"] = host;
+          addLog("Host injecté: $host");
+        } else if (network == "http" || network == "h2") {
+          stream["httpSettings"]??= {};
+          stream["httpSettings"]["host"] = [host];
+          addLog("Host HTTP injecté: $host");
+        }
+        outbound["streamSettings"] = stream;
+      }
+
+      return jsonEncode(json);
+    } catch (e) {
+      addLog("Erreur: $e");
+      return null;
+    }
+  }
+
+  Future<void> toggle() async {
+    if (estConnecte || enCours) {
+      addLog("Déconnexion...");
+      await v2ray.stopV2Ray();
+      setState(() {
+        estConnecte = false;
+        enCours = false;
+        statut = "DÉCONNECTÉ";
+      });
+      addLog("Déconnecté");
+      return;
+    }
+
+    final raw = configCtrl.text.trim();
+    final host = hostCtrl.text.trim();
+
+    if (raw.isEmpty) {
+      addLog("Aucune configuration");
+      return;
+    }
+
+    // ← CHANGÉ: On retire UDP de la liste des modes bloqués
+    if (modeSelectionne == "SlowDNS" || modeSelectionne == "SSH") {
+      addLog("Mode $modeSelectionne pas encore disponible");
+      setState(() => statut = "MODE BIENTÔT DISPO");
+      return;
+    }
+
+    final config = buildFinalConfig(raw, host);
+    if (config == null) {
+      setState(() => statut = "CONFIG INVALIDE");
+      addLog("Configuration invalide");
+      return;
+    }
+
+    setState(() {
+      enCours = true;
+      statut = "CONNEXION...";
+    });
+
+    addLog("Mode: $modeSelectionne");
+    addLog("Demande permission VPN...");
+
+    try {
+      final ok = await v2ray.requestPermission();
+      if (!ok) {
+        addLog("Permission refusée");
+        setState(() {
+          enCours = false;
+          statut = "PERMISSION REFUSÉE";
+        });
+        return;
+      }
+
+      addLog("Lancement du tunnel...");
+      await v2ray.startV2Ray(
+        remark: notificationName,
+        config: config,
+        blockedApps: [],
+      );
+    } catch (e) {
+      addLog("Échec: $e");
+      setState(() {
+        enCours = false;
+        statut = "ÉCHEC";
+      });
+    }
+  }
+
+  void exportConfig() {
+    final data = {
+      "mode": modeSelectionne,
+      "host": hostCtrl.text.trim(),
+      "config": configCtrl.text.trim(),
+    };
+    final jsonStr = jsonEncode(data);
+    Clipboard.setData(ClipboardData(text: jsonStr));
+    addLog("Configuration exportée (copiée)");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Configuration copiée dans le presse-papiers")),
+    );
+  }
+
+  void importConfig() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text == null) return;
+
+    try {
+      final map = jsonDecode(data!.text!);
+      setState(() {
+        modeSelectionne = map["mode"]?? "VLESS / VMess";
+        hostCtrl.text = map["host"]?? "";
+        configCtrl.text = map["config"]?? "";
+      });
+      addLog("Configuration importée");
+    } catch (e) {
+      addLog("Import échoué");
+    }
+  }
+
+  void _openLogsScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => LogsScreen(logs: logs)),
+    );
+  }
+
+  void _launchWhatsApp() async {
+    final url = Uri.parse('https://chat.whatsapp.com/GtBg9UmAV0k0ZwyfA07NkX');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      }
+    }
   }
 
   Color get couleur {
@@ -120,55 +353,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Color(0xFFEF4444);
   }
 
-  void ouvrirEcranMode() {
-    switch (modeSelectionne) {
-      case "VLESS / VMess":
-        Navigator.push(context, MaterialPageRoute(
-          builder: (context) => EcranVless(
-            v2ray: v2ray,
-            addLog: addLog,
-            logs: logs,
-          ),
-        ));
-        break;
-      case "UDP":
-        Navigator.push(context, MaterialPageRoute(
-          builder: (context) => EcranUDP(
-            v2ray: v2ray,
-            addLog: addLog,
-            logs: logs,
-          ),
-        ));
-        break;
-      case "SlowDNS":
-        Navigator.push(context, MaterialPageRoute(
-          builder: (context) => EcranSlowDNS(
-            v2ray: v2ray,
-            addLog: addLog,
-            logs: logs,
-          ),
-        ));
-        break;
-      case "Trojan":
-        Navigator.push(context, MaterialPageRoute(
-          builder: (context) => EcranTrojan(
-            v2ray: v2ray,
-            addLog: addLog,
-            logs: logs,
-          ),
-        ));
-        break;
-      case "SSH":
-        addLog("Mode SSH bientôt disponible");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Mode SSH bientôt disponible")),
-        );
-        break;
+  // ← NOUVEAU: Hint dynamique selon le mode
+  String get configHint {
+    if (modeSelectionne == "Configuration du mode UDP") {
+      return "Exemple: 192.168.1.1:1080@user:pass";
     }
+    return "Colle ton lien vless:// ou vmess:// ou JSON";
   }
 
   @override
   void dispose() {
+    hostCtrl.dispose();
+    configCtrl.dispose();
     logScroll.dispose();
     super.dispose();
   }
@@ -186,11 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.article),
             tooltip: "Logs",
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(
-                builder: (context) => LogsScreen(logs: logs)
-              ));
-            },
+            onPressed: _openLogsScreen,
           ),
         ],
       ),
@@ -227,7 +419,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
+
               const SizedBox(height: 14),
+
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -245,18 +439,99 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
-              ElevatedButton(
-                onPressed: ouvrirEcranMode,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
+              const SizedBox(height: 16),
+
+              GestureDetector(
+                onTap: enCours? null : toggle,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey[100],
+                    border: Border.all(color: couleur, width: 4),
+                    boxShadow: [
+                      BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 25, spreadRadius: 4)
+                    ],
+                  ),
+                  child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
                 ),
-                child: Text("Ouvrir $modeSelectionne", style: const TextStyle(fontSize: 16)),
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 16),
+
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
+              ),
+              const SizedBox(height: 5),
+              TextField(
+                controller: hostCtrl,
+                style: const TextStyle(color: Colors.black),
+                decoration: InputDecoration(
+                  hintText: "Exemple: yamo.mtn.cm",
+                  hintStyle: const TextStyle(color: Colors.black38),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
+              ),
+              const SizedBox(height: 5),
+              TextField(
+                controller: configCtrl,
+                maxLines: 3,
+                style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  hintText: configHint, // ← CHANGÉ: hint dynamique
+                  hintStyle: const TextStyle(color: Colors.black38),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: importConfig,
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text("Import"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: exportConfig,
+                      icon: const Icon(Icons.upload, size: 18),
+                      label: const Text("Export"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text("LOGS", style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -264,11 +539,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 5),
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (context) => LogsScreen(logs: logs)
-                    ));
-                  },
+                  onTap: _openLogsScreen,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
@@ -278,18 +549,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: logs.isEmpty
-         ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
-                      : ListView.builder(
-                          controller: logScroll,
-                          itemCount: logs.length > 5? 5 : logs.length,
-                          itemBuilder: (_, i) => Text(
-                            logs[logs.length - 1 - i],
-                            style: const TextStyle(color: Colors.black54, fontSize: 11, fontFamily: 'monospace'),
+                       ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+                        : ListView.builder(
+                            controller: logScroll,
+                            itemCount: logs.length > 3? 3 : logs.length,
+                            itemBuilder: (_, i) => Text(
+                              logs[logs.length - 1 - i],
+                              style: const TextStyle(color: Colors.black54, fontSize: 11, fontFamily: 'monospace'),
+                            ),
                           ),
-                        ),
                   ),
                 ),
               ),
+
               const SizedBox(height: 8),
               const Text(
                 "DEV : kcørp tech serf",
@@ -299,758 +571,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class EcranVless extends StatefulWidget {
-  final FlutterV2ray v2ray;
-  final Function(String) addLog;
-  final List<String> logs;
-
-  const EcranVless({
-    super.key,
-    required this.v2ray,
-    required this.addLog,
-    required this.logs,
-  });
-
-  @override
-  State<EcranVless> createState() => _EcranVlessState();
-}
-
-class _EcranVlessState extends State<EcranVless> {
-  final TextEditingController hostCtrl = TextEditingController();
-  final TextEditingController configCtrl = TextEditingController();
-  bool enCours = false;
-
-  String? buildFinalConfig(String raw, String host) {
-    try {
-      if (raw.trim().startsWith("{")) {
-        widget.addLog("JSON détecté");
-        return raw.trim();
-      }
-
-      if (!raw.startsWith("vless://") &&
-!raw.startsWith("vmess://") &&
-!raw.startsWith("trojan://")) {
-        return null;
-      }
-
-      widget.addLog("Transformation du lien...");
-      final parser = FlutterV2ray.parseFromURL(raw.trim());
-      final full = parser.getFullConfiguration();
-      final Map<String, dynamic> json = jsonDecode(full);
-
-      if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
-        final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"]?? {};
-        final network = stream["network"]?? "ws";
-
-        if (network == "ws") {
-          stream["wsSettings"]??= {};
-          stream["wsSettings"]["headers"]??= {};
-          stream["wsSettings"]["headers"]["Host"] = host;
-          widget.addLog("Host injecté: $host");
-        } else if (network == "http" || network == "h2") {
-          stream["httpSettings"]??= {};
-          stream["httpSettings"]["host"] = [host];
-          widget.addLog("Host HTTP injecté: $host");
-        }
-        outbound["streamSettings"] = stream;
-      }
-
-      return jsonEncode(json);
-    } catch (e) {
-      widget.addLog("Erreur: $e");
-      return null;
-    }
-  }
-
-  Future<void> connecter() async {
-    final raw = configCtrl.text.trim();
-    final host = hostCtrl.text.trim();
-
-    if (raw.isEmpty) {
-      widget.addLog("Aucune configuration");
-      return;
-    }
-
-    final config = buildFinalConfig(raw, host);
-    if (config == null) {
-      widget.addLog("Configuration invalide");
-      return;
-    }
-
-    setState(() => enCours = true);
-    widget.addLog("Mode: VLESS / VMess");
-    widget.addLog("Demande permission VPN...");
-
-    try {
-      final ok = await widget.v2ray.requestPermission();
-      if (!ok) {
-        widget.addLog("Permission refusée");
-        setState(() => enCours = false);
-        return;
-      }
-
-      widget.addLog("Lancement du tunnel...");
-      await widget.v2ray.startV2Ray(
-        remark: "kčø4p VLESS connected",
-        config: config,
-        blockedApps: [],
-      );
-      Navigator.pop(context);
-    } catch (e) {
-      widget.addLog("Échec: $e");
-      setState(() => enCours = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    hostCtrl.dispose();
-    configCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text("VLESS / VMess"),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
-            ),
-            const SizedBox(height: 5),
-            TextField(
-              controller: hostCtrl,
-              style: const TextStyle(color: Colors.black),
-              decoration: InputDecoration(
-                hintText: "Exemple: yamo.mtn.cm",
-                hintStyle: const TextStyle(color: Colors.black38),
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
-            ),
-            const SizedBox(height: 5),
-            Expanded(
-              child: TextField(
-                controller: configCtrl,
-                maxLines: null,
-                expands: true,
-                style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-                  hintStyle: const TextStyle(color: Colors.black38),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: enCours? null : connecter,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text(enCours? "CONNEXION..." : "CONNECTER"),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class EcranUDP extends StatefulWidget {
-  final FlutterV2ray v2ray;
-  final Function(String) addLog;
-  final List<String> logs;
-
-  const EcranUDP({
-    super.key,
-    required this.v2ray,
-    required this.addLog,
-    required this.logs,
-  });
-
-  @override
-  State<EcranUDP> createState() => _EcranUDPState();
-}
-
-class _EcranUDPState extends State<EcranUDP> {
-  final TextEditingController ipCtrl = TextEditingController();
-  final TextEditingController portCtrl = TextEditingController();
-  final TextEditingController userCtrl = TextEditingController();
-  final TextEditingController passCtrl = TextEditingController();
-  final TextEditingController dnsCtrl = TextEditingController();
-  bool dnsEnable = true;
-  bool enCours = false;
-
-  String? buildUDPConfig() {
-    try {
-      final ip = ipCtrl.text.trim();
-      final port = int.tryParse(portCtrl.text.trim())?? 443;
-      final user = userCtrl.text.trim();
-      final pass = passCtrl.text.trim();
-      final dns = dnsCtrl.text.trim();
-
-      if (ip.isEmpty || user.isEmpty || pass.isEmpty) {
-        widget.addLog("IP, User et Pass requis");
-        return null;
-      }
-
-      widget.addLog("Config UDP: $ip:$port@$user");
-
-      Map<String, dynamic> config = {
-        "inbounds": [
-          {
-            "port": 10808,
-            "listen": "127.0.0.1",
-            "protocol": "socks",
-            "settings": {"udp": true}
-          }
-        ],
-        "outbounds": [
-          {
-            "protocol": "socks",
-            "settings": {
-              "servers": [
-                {
-                  "address": ip,
-                  "port": port,
-                  "users": [{"user": user, "pass": pass}]
-                }
-              ]
-            },
-            "streamSettings": {
-              "network": "udp",
-              "sockopt": {"mark": 255}
-            }
-          }
-        ]
-      };
-
-      if (dnsEnable) {
-        config["dns"] = <String, dynamic>{
-          "servers": [dns.isNotEmpty? dns : "8.8.8.8", "1.1.1.1"]
-        };
-      }
-
-      widget.addLog("DNS ${dnsEnable? 'activé' : 'désactivé'}");
-      return jsonEncode(config);
-    } catch (e) {
-      widget.addLog("Erreur UDP: $e");
-      return null;
-    }
-  }
-
-  Future<void> connecter() async {
-    final config = buildUDPConfig();
-    if (config == null) return;
-
-    setState(() => enCours = true);
-    widget.addLog("Mode: UDP");
-    widget.addLog("Demande permission VPN...");
-
-    try {
-      final ok = await widget.v2ray.requestPermission();
-      if (!ok) {
-        widget.addLog("Permission refusée");
-        setState(() => enCours = false);
-        return;
-      }
-
-      widget.addLog("Lancement du tunnel...");
-      await widget.v2ray.startV2Ray(
-        remark: "kčø4p UDP connected",
-        config: config,
-        blockedApps: [],
-      );
-      Navigator.pop(context);
-    } catch (e) {
-      widget.addLog("Échec: $e");
-      setState(() => enCours = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    ipCtrl.dispose();
-    portCtrl.dispose();
-    userCtrl.dispose();
-    passCtrl.dispose();
-    dnsCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text("Mode UDP"),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: ipCtrl,
-              style: const TextStyle(color: Colors.black),
-              decoration: InputDecoration(
-                labelText: "IP Serveur",
-                hintText: "45.76.123.45",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: portCtrl,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.black),
-              decoration: InputDecoration(
-                labelText: "Port",
-                hintText: "443",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: userCtrl,
-              style: const TextStyle(color: Colors.black),
-              decoration: InputDecoration(
-                labelText: "Username",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: passCtrl,
-              obscureText: true,
-              style: const TextStyle(color: Colors.black),
-              decoration: InputDecoration(
-                labelText: "Password",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Checkbox(
-                  value: dnsEnable,
-                  onChanged: (val) => setState(() => dnsEnable = val?? true),
-                ),
-                const Text("Activer DNS", style: TextStyle(color: Colors.black87)),
-              ],
-            ),
-            if (dnsEnable)...[
-              const SizedBox(height: 10),
-              TextField(
-                controller: dnsCtrl,
-                style: const TextStyle(color: Colors.black),
-                decoration: InputDecoration(
-                  labelText: "DNS Server",
-                  hintText: "1.1.1.1",
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-            ],
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: enCours? null : connecter,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text(enCours? "CONNEXION..." : "CONNECTER"),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class EcranSlowDNS extends StatefulWidget {
-  final FlutterV2ray v2ray;
-  final Function(String) addLog;
-  final List<String> logs;
-
-  const EcranSlowDNS({
-    super.key,
-    required this.v2ray,
-    required this.addLog,
-    required this.logs,
-  });
-
-  @override
-  State<EcranSlowDNS> createState() => _EcranSlowDNSState();
-}
-
-class _EcranSlowDNSState extends State<EcranSlowDNS> {
-  final TextEditingController dnsCtrl = TextEditingController();
-  final TextEditingController configCtrl = TextEditingController();
-  bool enCours = false;
-
-  String? buildSlowDNSConfig() {
-    try {
-      final raw = configCtrl.text.trim();
-      if (raw.startsWith("{")) {
-        widget.addLog("JSON SlowDNS custom détecté");
-        return raw;
-      }
-
-      final dns = dnsCtrl.text.trim();
-      if (dns.isEmpty) {
-        widget.addLog("SlowDNS nécessite un DNS Server");
-        return null;
-      }
-
-      widget.addLog("Construction config SlowDNS...");
-      Map<String, dynamic> config = {
-        "inbounds": [
-          {
-            "port": 10808,
-            "listen": "127.0.0.1",
-            "protocol": "socks",
-            "settings": {"udp": true}
-          }
-        ],
-        "outbounds": [
-          {
-            "protocol": "freedom",
-            "settings": {"domainStrategy": "UseIP"},
-            "streamSettings": {"network": "tcp"}
-          }
-        ],
-        "dns": {
-          "servers": [dns, "8.8.8.8"],
-          "queryStrategy": "UseIP"
-        }
-      };
-      widget.addLog("Config SlowDNS prête - DNS: $dns");
-      return jsonEncode(config);
-    } catch (e) {
-      widget.addLog("Erreur SlowDNS: $e");
-      return null;
-    }
-  }
-
-  Future<void> connecter() async {
-    final config = buildSlowDNSConfig();
-    if (config == null) return;
-
-    setState(() => enCours = true);
-    widget.addLog("Mode: SlowDNS");
-    widget.addLog("Demande permission VPN...");
-
-    try {
-      final ok = await widget.v2ray.requestPermission();
-      if (!ok) {
-        widget.addLog("Permission refusée");
-        setState(() => enCours = false);
-        return;
-      }
-
-      widget.addLog("Lancement du tunnel...");
-      await widget.v2ray.startV2Ray(
-        remark: "kčø4p SlowDNS connected",
-        config: config,
-        blockedApps: [],
-      );
-      Navigator.pop(context);
-    } catch (e) {
-      widget.addLog("Échec: $e");
-      setState(() => enCours = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    dnsCtrl.dispose();
-    configCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text("SlowDNS"),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text("DNS SERVER", style: TextStyle(color: Colors.black54, fontSize: 12)),
-            ),
-            const SizedBox(height: 5),
-            TextField(
-              controller: dnsCtrl,
-              style: const TextStyle(color: Colors.black),
-              decoration: InputDecoration(
-                hintText: "1.1.1.1",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text("CONFIG JSON (optionnel)", style: TextStyle(color: Colors.black54, fontSize: 12)),
-            ),
-            const SizedBox(height: 5),
-            Expanded(
-              child: TextField(
-                controller: configCtrl,
-                maxLines: null,
-                expands: true,
-                style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: "Laisse vide pour config auto\nou colle ton JSON SlowDNS custom",
-                  hintStyle: const TextStyle(color: Colors.black38),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: enCours? null : connecter,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text(enCours? "CONNEXION..." : "CONNECTER"),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class EcranTrojan extends StatefulWidget {
-  final FlutterV2ray v2ray;
-  final Function(String) addLog;
-  final List<String> logs;
-
-  const EcranTrojan({
-    super.key,
-    required this.v2ray,
-    required this.addLog,
-    required this.logs,
-  });
-
-  @override
-  State<EcranTrojan> createState() => _EcranTrojanState();
-}
-
-class _EcranTrojanState extends State<EcranTrojan> {
-  final TextEditingController hostCtrl = TextEditingController();
-  final TextEditingController configCtrl = TextEditingController();
-  bool enCours = false;
-
-  String? buildFinalConfig(String raw, String host) {
-    try {
-      if (raw.trim().startsWith("{")) {
-        widget.addLog("JSON détecté");
-        return raw.trim();
-      }
-
-      if (!raw.startsWith("trojan://")) return null;
-
-      widget.addLog("Transformation du lien...");
-      final parser = FlutterV2ray.parseFromURL(raw.trim());
-      final full = parser.getFullConfiguration();
-      final Map<String, dynamic> json = jsonDecode(full);
-
-      if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
-        final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"]?? {};
-        final network = stream["network"]?? "ws";
-
-        if (network == "ws") {
-          stream["wsSettings"]??= {};
-          stream["wsSettings"]["headers"]??= {};
-          stream["wsSettings"]["headers"]["Host"] = host;
-          widget.addLog("Host injecté: $host");
-        } else if (network == "http" || network == "h2") {
-          stream["httpSettings"]??= {};
-          stream["httpSettings"]["host"] = [host];
-          widget.addLog("Host HTTP injecté: $host");
-        }
-        outbound["streamSettings"] = stream;
-      }
-
-      return jsonEncode(json);
-    } catch (e) {
-      widget.addLog("Erreur: $e");
-      return null;
-    }
-  }
-
-  Future<void> connecter() async {
-    final raw = configCtrl.text.trim();
-    final host = hostCtrl.text.trim();
-
-    if (raw.isEmpty) {
-      widget.addLog("Aucune configuration");
-      return;
-    }
-
-    final config = buildFinalConfig(raw, host);
-    if (config == null) {
-      widget.addLog("Configuration invalide");
-      return;
-    }
-
-    setState(() => enCours = true);
-    widget.addLog("Mode: Trojan");
-    widget.addLog("Demande permission VPN...");
-
-    try {
-      final ok = await widget.v2ray.requestPermission();
-      if (!ok) {
-        widget.addLog("Permission refusée");
-        setState(() => enCours = false);
-        return;
-      }
-
-      widget.addLog("Lancement du tunnel...");
-      await widget.v2ray.startV2Ray(
-        remark: "kčø4p Trojan connected",
-        config: config,
-        blockedApps: [],
-      );
-      Navigator.pop(context);
-    } catch (e) {
-      widget.addLog("Échec: $e");
-      setState(() => enCours = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    hostCtrl.dispose();
-    configCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text("Trojan"),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
-            ),
-            const SizedBox(height: 5),
-            TextField(
-              controller: hostCtrl,
-              style: const TextStyle(color: Colors.black),
-              decoration: InputDecoration(
-                hintText: "Exemple: yamo.mtn.cm",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
-            ),
-            const SizedBox(height: 5),
-            Expanded(
-              child: TextField(
-                controller: configCtrl,
-                maxLines: null,
-                expands: true,
-                style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: "Colle ton lien trojan:// ou JSON",
-                  hintStyle: const TextStyle(color: Colors.black38),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: enCours? null : connecter,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text(enCours? "CONNEXION..." : "CONNECTER"),
-              ),
-            ),
-          ],
-        ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.green,
+        child: const Icon(Icons.chat, color: Colors.white),
+        onPressed: _launchWhatsApp,
       ),
     );
   }
@@ -1058,15 +582,8 @@ class _EcranTrojanState extends State<EcranTrojan> {
 
 class LogsScreen extends StatelessWidget {
   final List<String> logs;
-  const LogsScreen({super.key, required this.logs});
 
-  Color _getLogColor(String log) {
-    if (log.contains("ready to use")) return Colors.green;
-    if (log.contains("Failed") || log.contains("Erreur") || log.contains("Échec")) return Colors.red;
-    if (log.contains("CONNECTING")) return Colors.orange;
-    if (log.contains("stopped") || log.contains("Déconnecté")) return Colors.amber;
-    return Colors.black87;
-  }
+  const LogsScreen({super.key, required this.logs});
 
   @override
   Widget build(BuildContext context) {
@@ -1075,28 +592,24 @@ class LogsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Logs'),
         backgroundColor: Colors.white,
-        elevation: 0,
+        foregroundColor: Colors.black,
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
         itemCount: logs.length,
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          thickness: 0.5,
-          color: Colors.grey[300],
-        ),
-        itemBuilder: (context, index) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            logs[index],
-            style: TextStyle(
-              fontSize: 11,
-              fontFamily: 'monospace',
-              color: _getLogColor(logs[index]),
-              fontWeight: logs[index].contains("ready to use")? FontWeight.bold : FontWeight.normal,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              logs[index],
+              style: const TextStyle(
+                color: Colors.black87,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
