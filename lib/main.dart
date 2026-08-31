@@ -393,7 +393,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextField(
                 controller: hostCtrl,
                 decoration: InputDecoration(
-                  hintText: "Exemple: yamo.mtn.cm",
+                  hintText: "votre host ici ",
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
