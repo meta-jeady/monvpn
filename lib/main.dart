@@ -49,10 +49,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool enCours = false;
   String modeSelectionne = "VLESS / VMess";
 
-  // ← CHANGÉ: Ajout du libellé pour UDP
   final List<String> modes = [
     "VLESS / VMess",
-    "Configuration du mode UDP", // ← CHANGÉ
+    "UDP",
     "SlowDNS",
     "SSH",
     "Trojan",
@@ -95,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> initCore() async {
     addLog("Démarrage du core...");
     await v2ray.initializeV2Ray();
-    if (!mounted) return;
     try {
       final version = await v2ray.getCoreVersion();
       addLog("Core prêt - Xray $version");
@@ -105,12 +103,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void addLog(String msg) {
-    if (!mounted) return;
     final time = DateTime.now().toString().substring(11, 19);
     setState(() {
       logs.add("[$time] $msg");
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(milliseconds: 80), () {
       if (logScroll.hasClients) {
         logScroll.jumpTo(logScroll.position.maxScrollExtent);
       }
@@ -119,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String get notificationName {
     switch (modeSelectionne) {
-      case "Configuration du mode UDP":
+      case "UDP":
         return "kčø4p UDP connected";
       case "SlowDNS":
         return "kčø4p SlowDNS connected";
@@ -132,8 +129,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ← NOUVEAU: Parse le format ip:port@username:password pour UDP
-  Map<String, String>? parseUdpConfig(String raw) {
+  bool get hostRequis {
+    return modeSelectionne == "VLESS / VMess" ||
+           modeSelectionne == "Trojan" ||
+           modeSelectionne == "SlowDNS";
+  }
+
+  // Parse UDP/SSH: ip:port@user:pass
+  Map<String, String>? parseUdpSsh(String raw) {
     final regex = RegExp(r'^(.+):(\d+)@(.+):(.+)$');
     final match = regex.firstMatch(raw.trim());
     if (match == null) return null;
@@ -147,81 +150,109 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String? buildFinalConfig(String raw, String host) {
     try {
-      // ← NOUVEAU: Gestion UDP
-      if (modeSelectionne == "Configuration du mode UDP") {
-        final udpData = parseUdpConfig(raw);
-        if (udpData == null) {
-          addLog("Format UDP invalide. Utilise: ip:port@username:password");
-          return null;
-        }
-        addLog("Config UDP: ${udpData['ip']}:${udpData['port']}");
-
-        // Template V2Ray pour UDP/SOCKS
-        final json = {
-          "outbounds": [
-            {
-              "protocol": "socks",
-              "settings": {
-                "servers": [
-                  {
-                    "address": udpData['ip'],
-                    "port": int.parse(udpData['port']!),
-                    "users": [
-                      {
-                        "user": udpData['username'],
-                        "pass": udpData['password']
-                      }
-                    ]
-                  }
-                ]
-              },
-              "streamSettings": {
-                "network": "tcp" // ou "udp" selon ton serveur
-              }
-            }
-          ]
-        };
-        return jsonEncode(json);
-      }
-
-      // Ancien code VLESS/VMess/Trojan
+      // JSON brut
       if (raw.trim().startsWith("{")) {
         addLog("JSON détecté");
         return raw.trim();
       }
 
-      if (!raw.startsWith("vless://") &&
-         !raw.startsWith("vmess://") &&
-         !raw.startsWith("trojan://")) {
-        return null;
-      }
+      // VLESS/VMess/Trojan
+      if (raw.startsWith("vless://") || raw.startsWith("vmess://") || raw.startsWith("trojan://")) {
+        addLog("Transformation du lien...");
+        final parser = FlutterV2ray.parseFromURL(raw.trim());
+        final full = parser.getFullConfiguration();
+        final Map<String, dynamic> json = jsonDecode(full);
 
-      addLog("Transformation du lien...");
-      final parser = FlutterV2ray.parseFromURL(raw.trim());
-      final full = parser.getFullConfiguration();
-      final Map<String, dynamic> json = jsonDecode(full);
+        // Injection Host/SNI
+        if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
+          final outbound = json["outbounds"][0];
+          final stream = outbound["streamSettings"]?? {};
+          final network = stream["network"]?? "ws";
 
-      if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
-        final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"]?? {};
-        final network = stream["network"]?? "ws";
-
-        if (network == "ws") {
-          stream["wsSettings"]??= {};
-          stream["wsSettings"]["headers"]??= {};
-          stream["wsSettings"]["headers"]["Host"] = host;
-          addLog("Host injecté: $host");
-        } else if (network == "http" || network == "h2") {
-          stream["httpSettings"]??= {};
-          stream["httpSettings"]["host"] = [host];
-          addLog("Host HTTP injecté: $host");
+          if (network == "ws") {
+            stream["wsSettings"]??= {};
+            stream["wsSettings"]["headers"]??= {};
+            stream["wsSettings"]["headers"]["Host"] = host;
+            addLog("Host WS injecté: $host");
+          } else if (network == "http" || network == "h2") {
+            stream["httpSettings"]??= {};
+            stream["httpSettings"]["host"] = [host];
+            addLog("Host HTTP injecté: $host");
+          } else if (network == "tcp" && stream["security"] == "tls") {
+            stream["tlsSettings"]??= {};
+            stream["tlsSettings"]["serverName"] = host;
+            addLog("SNI TLS injecté: $host");
+          } else if (network == "grpc") {
+            stream["grpcSettings"]??= {};
+            stream["grpcSettings"]["serviceName"] = host;
+            addLog("SNI gRPC injecté: $host");
+          }
+          outbound["streamSettings"] = stream;
         }
-        outbound["streamSettings"] = stream;
+
+        return jsonEncode(json);
       }
 
-      return jsonEncode(json);
+      // UDP / SSH : ip:port@user:pass
+      if (modeSelectionne == "UDP" || modeSelectionne == "SSH") {
+        final data = parseUdpSsh(raw);
+        if (data == null) {
+          addLog("Format invalide. Ex: 192.168.1.1:1080@user:pass");
+          return null;
+        }
+
+        addLog("Config ${modeSelectionne}: ${data['ip']}:${data['port']}");
+        final json = {
+          "outbounds": [{
+            "protocol": "socks",
+            "settings": {
+              "servers": [{
+                "address": data['ip'],
+                "port": int.parse(data['port']!),
+                "users": [{
+                  "user": data['username'],
+                  "pass": data['password']
+                }]
+              }]
+            }
+          }]
+        };
+        return jsonEncode(json);
+      }
+
+      // SlowDNS : vless:// avec DNS
+      if (modeSelectionne == "SlowDNS") {
+        if (raw.startsWith("vless://") || raw.startsWith("vmess://")) {
+          final parser = FlutterV2ray.parseFromURL(raw.trim());
+          final full = parser.getFullConfiguration();
+          final Map<String, dynamic> json = jsonDecode(full);
+
+          // Force port 53 si pas défini
+          if (json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
+            final outbound = json["outbounds"][0];
+            if (outbound["port"] == null) {
+              outbound["port"] = 53;
+            }
+          }
+
+          // Injection Host
+          if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
+            final outbound = json["outbounds"][0];
+            final stream = outbound["streamSettings"]?? {};
+            stream["wsSettings"]??= {};
+            stream["wsSettings"]["headers"]??= {};
+            stream["wsSettings"]["headers"]["Host"] = host;
+            outbound["streamSettings"] = stream;
+            addLog("Host SlowDNS injecté: $host");
+          }
+
+          return jsonEncode(json);
+        }
+      }
+
+      return null;
     } catch (e) {
-      addLog("Erreur: $e");
+      addLog("Erreur build: $e");
       return null;
     }
   }
@@ -244,13 +275,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (raw.isEmpty) {
       addLog("Aucune configuration");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Colle ta config d'abord"), backgroundColor: Colors.red),
+      );
       return;
     }
 
-    // ← CHANGÉ: On retire UDP de la liste des modes bloqués
-    if (modeSelectionne == "SlowDNS" || modeSelectionne == "SSH") {
-      addLog("Mode $modeSelectionne pas encore disponible");
-      setState(() => statut = "MODE BIENTÔT DISPO");
+    // Host obligatoire pour V2Ray
+    if (hostRequis && host.isEmpty) {
+      addLog("ERREUR: Host requis pour $modeSelectionne");
+      setState(() => statut = "HOST MANQUANT");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Mets le Host de ton pays d'abord!"),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
       return;
     }
 
@@ -267,6 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     addLog("Mode: $modeSelectionne");
+    if (host.isNotEmpty) addLog("Host: $host");
     addLog("Demande permission VPN...");
 
     try {
@@ -303,9 +344,9 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     final jsonStr = jsonEncode(data);
     Clipboard.setData(ClipboardData(text: jsonStr));
-    addLog("Configuration exportée (copiée)");
+    addLog("Configuration exportée");
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Configuration copiée dans le presse-papiers")),
+      const SnackBar(content: Text("Configuration copiée")),
     );
   }
 
@@ -322,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       addLog("Configuration importée");
     } catch (e) {
-      addLog("Import échoué");
+      addLog("Import échoué - format invalide");
     }
   }
 
@@ -335,30 +376,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _launchWhatsApp() async {
     final url = Uri.parse('https://chat.whatsapp.com/GtBg9UmAV0k0ZwyfA07NkX');
-    try {
+    addLog("Ouverture WhatsApp...");
+    if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
-      }
+    } else {
+      addLog("Impossible d'ouvrir le lien");
     }
   }
 
   Color get couleur {
     if (estConnecte) return const Color(0xFF10B981);
     if (enCours) return const Color(0xFFF59E0B);
-    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
+    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC") || statut.contains("MANQUANT")) {
       return const Color(0xFF6B7280);
     }
     return const Color(0xFFEF4444);
   }
 
-  // ← NOUVEAU: Hint dynamique selon le mode
-  String get configHint {
-    if (modeSelectionne == "Configuration du mode UDP") {
-      return "Exemple: 192.168.1.1:1080@user:pass";
+  String get hintConfig {
+    switch (modeSelectionne) {
+      case "UDP":
+      case "SSH":
+        return "Exemple: 192.168.1.1:1080@user:pass";
+      case "SlowDNS":
+        return "Colle ton lien vless:// ou config SlowDNS";
+      case "Trojan":
+        return "Colle ton lien trojan://";
+      default:
+        return "Colle ton lien vless:// ou vmess:// ou JSON";
     }
-    return "Colle ton lien vless:// ou vmess:// ou JSON";
   }
 
   @override
@@ -456,15 +502,35 @@ class _HomeScreenState extends State<HomeScreen> {
                       BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 25, spreadRadius: 4)
                     ],
                   ),
-                  child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
+                  child: enCours
+                     ? const CircularProgressIndicator(
+                          color: Color(0xFFF59E0B),
+                          strokeWidth: 3,
+                        )
+                      : Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
                 ),
               ),
 
               const SizedBox(height: 16),
 
-              const Align(
+              // HOST - Rouge si obligatoire et vide
+              Align(
                 alignment: Alignment.centerLeft,
-                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
+                child: Row(
+                  children: [
+                    if (hostRequis)
+                      const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 14),
+                    if (hostRequis) const SizedBox(width: 4),
+                    Text(
+                      hostRequis? "HOST (Obligatoire)" : "HOST (Optionnel)",
+                      style: TextStyle(
+                        color: hostRequis? const Color(0xFFEF4444) : Colors.black54,
+                        fontSize: 12,
+                        fontWeight: hostRequis? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 5),
               TextField(
@@ -475,9 +541,36 @@ class _HomeScreenState extends State<HomeScreen> {
                   hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
                   fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: (hostRequis && hostCtrl.text.isEmpty)
+                         ? const Color(0xFFEF4444)
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: (hostRequis && hostCtrl.text.isEmpty)
+                         ? const Color(0xFFEF4444)
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: (hostRequis && hostCtrl.text.isEmpty)
+                         ? const Color(0xFFEF4444)
+                          : const Color(0xFF10B981),
+                      width: 2,
+                    ),
+                  ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
+                onChanged: (v) => setState(() {}),
               ),
 
               const SizedBox(height: 10),
@@ -492,7 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxLines: 3,
                 style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
-                  hintText: configHint, // ← CHANGÉ: hint dynamique
+                  hintText: hintConfig,
                   hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
                   fillColor: Colors.grey[100],
@@ -515,22 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: exportConfig,
-                      icon: const Icon(Icons.upload, size: 18),
-                      label: const Text("Export"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[200],
-                        foregroundColor: Colors.black,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
+                  const SizedBox(height: 10),
 
               const Align(
                 alignment: Alignment.centerLeft,
@@ -549,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: logs.isEmpty
-                       ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+                      ? const Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
                         : ListView.builder(
                             controller: logScroll,
                             itemCount: logs.length > 3? 3 : logs.length,
@@ -600,7 +678,7 @@ class LogsScreen extends StatelessWidget {
         itemBuilder: (context, index) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
+            child: SelectableText(
               logs[index],
               style: const TextStyle(
                 color: Colors.black87,
