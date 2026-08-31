@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:url_launcher/url_launcher.dart'; // ← AJOUT 1
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,8 +20,17 @@ class Kco4pVPNApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'KČØ4P VPN',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0B1220),
+      theme: ThemeData.light().copyWith( // ← MODIF 1: Thème blanc
+        scaffoldBackgroundColor: Colors.white,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.grey[100],
+        ),
       ),
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
@@ -67,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           if (state == "CONNECTED") {
-            statut = "kcorp vpn connecter";
+            statut = "FREE SERF"; // ← MODIF 2: FREE SERF
             estConnecte = true;
             enCours = false;
           } else if (state == "CONNECTING") {
@@ -131,8 +141,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-          !raw.startsWith("vmess://") &&
-          !raw.startsWith("trojan://")) {
+         !raw.startsWith("vmess://") &&
+         !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -141,18 +151,18 @@ class _HomeScreenState extends State<HomeScreen> {
       final full = parser.getFullConfiguration();
       final Map<String, dynamic> json = jsonDecode(full);
 
-      if (host.isNotEmpty && json["outbounds"] != null && json["outbounds"].isNotEmpty) {
+      if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
         final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"] ?? {};
-        final network = stream["network"] ?? "ws";
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
 
         if (network == "ws") {
-          stream["wsSettings"] ??= {};
-          stream["wsSettings"]["headers"] ??= {};
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
           stream["wsSettings"]["headers"]["Host"] = host;
           addLog("Host injecté: $host");
         } else if (network == "http" || network == "h2") {
-          stream["httpSettings"] ??= {};
+          stream["httpSettings"]??= {};
           stream["httpSettings"]["host"] = [host];
           addLog("Host HTTP injecté: $host");
         }
@@ -256,13 +266,29 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final map = jsonDecode(data!.text!);
       setState(() {
-        modeSelectionne = map["mode"] ?? "VLESS / VMess";
-        hostCtrl.text = map["host"] ?? "";
-        configCtrl.text = map["config"] ?? "";
+        modeSelectionne = map["mode"]?? "VLESS / VMess";
+        hostCtrl.text = map["host"]?? "";
+        configCtrl.text = map["config"]?? "";
       });
       addLog("Configuration importée");
     } catch (e) {
       addLog("Import échoué");
+    }
+  }
+
+  // ← MODIF 3: Fonction pour ouvrir les logs à part
+  void _openLogsScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => LogsScreen(logs: logs)),
+    );
+  }
+
+  // ← MODIF 4: Ouvrir WhatsApp
+  void _launchWhatsApp() async {
+    final url = Uri.parse('https://chat.whatsapp.com/GtBg9UmAV0k0ZwyfA07NkX');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -286,20 +312,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white, // ← Interface blanche
       appBar: AppBar(
         title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.group),
-            tooltip: "Groupe WhatsApp",
-            onPressed: () {
-              // Ouvre le lien WhatsApp
-              // Note: pour ouvrir vraiment le lien il faudra url_launcher plus tard
-              addLog("Groupe WhatsApp: https://chat.whatsapp.com/GtBg9UmAV0k0ZwyfA07NkX");
-            },
+            icon: const Icon(Icons.article),
+            tooltip: "Logs",
+            onPressed: _openLogsScreen, // ← Écran logs à part
           ),
         ],
       ),
@@ -311,26 +334,26 @@ class _HomeScreenState extends State<HomeScreen> {
               // Message + Dropdown Mode
               const Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: Colors.black87, fontSize: 13), // ← Noir
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: Colors.grey[100], // ← Gris clair
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
-                  dropdownColor: const Color(0xFF1E293B),
+                  dropdownColor: Colors.white,
                   underline: const SizedBox(),
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(color: Colors.black),
                   items: modes.map((m) {
                     return DropdownMenuItem(value: m, child: Text(m));
                   }).toList(),
                   onChanged: (value) {
-                    if (value != null) {
+                    if (value!= null) {
                       setState(() => modeSelectionne = value);
                       addLog("Mode changé → $value");
                     }
@@ -340,21 +363,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 14),
 
-              // Statut
+              // Statut FREE SERF en vert gras
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   statut,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: estConnecte ? const Color(0xFF10B981) : couleur,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
+                    color: estConnecte? Colors.green : couleur, // ← Vert quand connecté
+                    fontSize: 18, // ← Plus gros
+                    fontWeight: FontWeight.bold, // ← GRAS
                   ),
                 ),
               ),
@@ -363,14 +386,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Bouton Power
               GestureDetector(
-                onTap: enCours ? null : toggle,
+                onTap: enCours? null : toggle,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: 140,
                   height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF1E293B),
+                    color: Colors.grey[100],
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
                       BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 25, spreadRadius: 4)
@@ -385,17 +408,17 @@ class _HomeScreenState extends State<HomeScreen> {
               // Host
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.white60, fontSize: 12)),
+                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
               ),
               const SizedBox(height: 5),
               TextField(
                 controller: hostCtrl,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.black),
                 decoration: InputDecoration(
                   hintText: "Exemple: yamo.mtn.cm",
-                  hintStyle: const TextStyle(color: Colors.white30),
+                  hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: Colors.grey[100],
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
@@ -406,18 +429,18 @@ class _HomeScreenState extends State<HomeScreen> {
               // Configuration
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("CONFIGURATION", style: TextStyle(color: Colors.white60, fontSize: 12)),
+                child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
               ),
               const SizedBox(height: 5),
               TextField(
                 controller: configCtrl,
                 maxLines: 3,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
+                style: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-                  hintStyle: const TextStyle(color: Colors.white30),
+                  hintStyle: const TextStyle(color: Colors.black38),
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: Colors.grey[100],
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
@@ -433,8 +456,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.download, size: 18),
                       label: const Text("Import"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
-                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
                       ),
                     ),
                   ),
@@ -445,8 +468,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.upload, size: 18),
                       label: const Text("Export"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
-                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
                       ),
                     ),
                   ),
@@ -455,28 +478,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 10),
 
-              // Logs
+              // Logs aperçu - clique pour ouvrir
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("LOGS", style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold)),
+                child: Text("LOGS", style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 5),
               Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: ListView.builder(
-                    controller: logScroll,
-                    itemCount: logs.length,
-                    itemBuilder: (_, i) => Text(
-                      logs[i],
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontFamily: 'monospace'),
+                child: GestureDetector(
+                  onTap: _openLogsScreen, // ← Clique pour ouvrir logs
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[300]!),
                     ),
+                    child: logs.isEmpty
+                     ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+                      : ListView.builder(
+                          controller: logScroll,
+                          itemCount: logs.length > 3? 3 : logs.length,
+                          itemBuilder: (_, i) => Text(
+                            logs[logs.length - 1 - i],
+                            style: const TextStyle(color: Colors.black54, fontSize: 11, fontFamily: 'monospace'),
+                          ),
+                        ),
                   ),
                 ),
               ),
@@ -484,11 +512,53 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               const Text(
                 "DEV : kcørp tech serf",
-                style: TextStyle(color: Colors.white38, fontSize: 11),
+                style: TextStyle(color: Colors.black38, fontSize: 11),
               ),
             ],
           ),
         ),
+      ),
+      // Bouton WhatsApp vert flottant
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.green,
+        child: Icon(Icons.chat, color: Colors.white),
+        onPressed: _launchWhatsApp,
+      ),
+    );
+  }
+}
+
+// ← NOUVEL ÉCRAN LOGS SÉPARÉ
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+
+  const LogsScreen({super.key, required this.logs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Logs'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: logs.length,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              logs[index],
+              style: const TextStyle(
+                color: Colors.black87,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+            ),
+          );
+        },
       ),
     );
   }
