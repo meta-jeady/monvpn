@@ -28,7 +28,6 @@ class Kco4pVPNApp extends StatelessWidget {
   }
 }
 
-// ← ÉCRAN PRINCIPAL AVEC SÉLECTEUR DE MODE
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -228,9 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
-
               const SizedBox(height: 14),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -248,9 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
-
               ElevatedButton(
                 onPressed: ouvrirEcranMode,
                 style: ElevatedButton.styleFrom(
@@ -261,9 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Text("Ouvrir $modeSelectionne", style: const TextStyle(fontSize: 16)),
               ),
-
               const SizedBox(height: 20),
-
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text("LOGS", style: TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -285,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: logs.isEmpty
-            ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+         ? Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
                       : ListView.builder(
                           controller: logScroll,
                           itemCount: logs.length > 5? 5 : logs.length,
@@ -297,7 +290,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 8),
               const Text(
                 "DEV : kcørp tech serf",
@@ -311,7 +303,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ← ÉCRAN VLESS/VMess - TA LOGIQUE 100% INTACTE
 class EcranVless extends StatefulWidget {
   final FlutterV2ray v2ray;
   final Function(String) addLog;
@@ -341,8 +332,8 @@ class _EcranVlessState extends State<EcranVless> {
       }
 
       if (!raw.startsWith("vless://") &&
-  !raw.startsWith("vmess://") &&
-  !raw.startsWith("trojan://")) {
+!raw.startsWith("vmess://") &&
+!raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -493,7 +484,6 @@ class _EcranVlessState extends State<EcranVless> {
   }
 }
 
-// ← ÉCRAN UDP
 class EcranUDP extends StatefulWidget {
   final FlutterV2ray v2ray;
   final Function(String) addLog;
@@ -534,7 +524,7 @@ class _EcranUDPState extends State<EcranUDP> {
 
       widget.addLog("Config UDP: $ip:$port@$user");
 
-      final config = {
+      Map<String, dynamic> config = {
         "inbounds": [
           {
             "port": 10808,
@@ -564,7 +554,7 @@ class _EcranUDPState extends State<EcranUDP> {
       };
 
       if (dnsEnable) {
-        config["dns"] = {
+        config["dns"] = <String, dynamic>{
           "servers": [dns.isNotEmpty? dns : "8.8.8.8", "1.1.1.1"]
         };
       }
@@ -720,7 +710,6 @@ class _EcranUDPState extends State<EcranUDP> {
   }
 }
 
-// ← ÉCRAN SlowDNS
 class EcranSlowDNS extends StatefulWidget {
   final FlutterV2ray v2ray;
   final Function(String) addLog;
@@ -757,7 +746,7 @@ class _EcranSlowDNSState extends State<EcranSlowDNS> {
       }
 
       widget.addLog("Construction config SlowDNS...");
-      final config = {
+      Map<String, dynamic> config = {
         "inbounds": [
           {
             "port": 10808,
@@ -891,7 +880,6 @@ class _EcranSlowDNSState extends State<EcranSlowDNS> {
   }
 }
 
-// ← ÉCRAN Trojan
 class EcranTrojan extends StatefulWidget {
   final FlutterV2ray v2ray;
   final Function(String) addLog;
