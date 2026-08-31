@@ -25,10 +25,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Clean and regenerate Android folder
-        run: |
-          rm -rf android
-          flutter create . --org com.kco4p --project-name kco4p_vpn --platforms=android
+      # SUPPRIME l'étape "Clean and regenerate Android folder"
+      # À la place, fais juste un clean Flutter
+      
+      - name: Flutter Clean
+        run: flutter clean
 
       - name: Install dependencies
         run: flutter pub get
