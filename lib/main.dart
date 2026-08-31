@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -135,7 +134,6 @@ class _HomeScreenState extends State<HomeScreen> {
            modeSelectionne == "SlowDNS";
   }
 
-  // Parse UDP/SSH: ip:port@user:pass
   Map<String, String>? parseUdpSsh(String raw) {
     final regex = RegExp(r'^(.+):(\d+)@(.+):(.+)$');
     final match = regex.firstMatch(raw.trim());
@@ -150,20 +148,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String? buildFinalConfig(String raw, String host) {
     try {
-      // JSON brut
       if (raw.trim().startsWith("{")) {
         addLog("JSON détecté");
         return raw.trim();
       }
 
-      // VLESS/VMess/Trojan
       if (raw.startsWith("vless://") || raw.startsWith("vmess://") || raw.startsWith("trojan://")) {
         addLog("Transformation du lien...");
         final parser = FlutterV2ray.parseFromURL(raw.trim());
         final full = parser.getFullConfiguration();
         final Map<String, dynamic> json = jsonDecode(full);
 
-        // Injection Host/SNI
         if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
           final outbound = json["outbounds"][0];
           final stream = outbound["streamSettings"]?? {};
@@ -193,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return jsonEncode(json);
       }
 
-      // UDP / SSH : ip:port@user:pass
       if (modeSelectionne == "UDP" || modeSelectionne == "SSH") {
         final data = parseUdpSsh(raw);
         if (data == null) {
@@ -220,14 +214,12 @@ class _HomeScreenState extends State<HomeScreen> {
         return jsonEncode(json);
       }
 
-      // SlowDNS : vless:// avec DNS
       if (modeSelectionne == "SlowDNS") {
         if (raw.startsWith("vless://") || raw.startsWith("vmess://")) {
           final parser = FlutterV2ray.parseFromURL(raw.trim());
           final full = parser.getFullConfiguration();
           final Map<String, dynamic> json = jsonDecode(full);
 
-          // Force port 53 si pas défini
           if (json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
             final outbound = json["outbounds"][0];
             if (outbound["port"] == null) {
@@ -235,7 +227,6 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           }
 
-          // Injection Host
           if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
             final outbound = json["outbounds"][0];
             final stream = outbound["streamSettings"]?? {};
@@ -275,13 +266,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (raw.isEmpty) {
       addLog("Aucune configuration");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Colle ta config d'abord"), backgroundColor: Colors.red),
-      );
       return;
     }
 
-    // Host obligatoire pour V2Ray
     if (hostRequis && host.isEmpty) {
       addLog("ERREUR: Host requis pour $modeSelectionne");
       setState(() => statut = "HOST MANQUANT");
@@ -374,15 +361,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _launchWhatsApp() async {
-    final url = Uri.parse('https://chat.whatsapp.com/GtBg9UmAV0k0ZwyfA07NkX');
-    addLog("Ouverture WhatsApp...");
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      addLog("Impossible d'ouvrir le lien");
-    }
-  }
+  // SUPPRIMÉ: _launchWhatsApp() - ton code n'avait pas ça
 
   Color get couleur {
     if (estConnecte) return const Color(0xFF10B981);
@@ -503,7 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   child: enCours
-                     ? const CircularProgressIndicator(
+                   ? const CircularProgressIndicator(
                           color: Color(0xFFF59E0B),
                           strokeWidth: 3,
                         )
@@ -513,7 +492,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 16),
 
-              // HOST - Rouge si obligatoire et vide
               Align(
                 alignment: Alignment.centerLeft,
                 child: Row(
@@ -545,7 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                       color: (hostRequis && hostCtrl.text.isEmpty)
-                         ? const Color(0xFFEF4444)
+                       ? const Color(0xFFEF4444)
                           : Colors.transparent,
                       width: 2,
                     ),
@@ -554,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                       color: (hostRequis && hostCtrl.text.isEmpty)
-                         ? const Color(0xFFEF4444)
+                       ? const Color(0xFFEF4444)
                           : Colors.transparent,
                       width: 2,
                     ),
@@ -563,7 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                       color: (hostRequis && hostCtrl.text.isEmpty)
-                         ? const Color(0xFFEF4444)
+                       ? const Color(0xFFEF4444)
                           : const Color(0xFF10B981),
                       width: 2,
                     ),
@@ -608,7 +586,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: exportConfig,
+                      icon: const Icon(Icons.upload, size: 18),
+                      label: const Text("Export"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
 
               const Align(
                 alignment: Alignment.centerLeft,
@@ -627,7 +618,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       border: Border.all(color: Colors.grey[300]!),
                     ),
                     child: logs.isEmpty
-                      ? const Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
+                    ? const Center(child: Text("Clique pour voir les logs", style: TextStyle(color: Colors.black38)))
                         : ListView.builder(
                             controller: logScroll,
                             itemCount: logs.length > 3? 3 : logs.length,
@@ -648,11 +639,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.chat, color: Colors.white),
-        onPressed: _launchWhatsApp,
       ),
     );
   }
