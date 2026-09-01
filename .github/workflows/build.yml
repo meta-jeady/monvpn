@@ -27,10 +27,7 @@ jobs:
           cache: true
 
       - name: Clean project
-        run: |
-          flutter clean
-          rm -rf android
-          flutter create . --org com.kco4p --project-name kco4p_vpn --platforms=android
+        run: flutter clean
 
       - name: Get dependencies
         run: flutter pub get
