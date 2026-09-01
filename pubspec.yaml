@@ -1,21 +1,24 @@
 name: kco4p_vpn
-description: KČØ4P VPN App
+description: KČØ4P VPN
+publish_to: 'none'
+version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.1.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  file_picker: ^8.0.0
-  path_provider: ^2.1.2
-  share_plus: ^10.0.0
-  flutter_widget_from_html: ^0.15.0
+  flutter_v2ray: ^1.0.10
+  cupertino_icons: ^1.0.8
+  file_picker: ^8.0.7
+  path_provider: ^2.1.4
+  share_plus: ^10.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
