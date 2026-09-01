@@ -9,11 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_v2ray: ^1.0.10
+  flutter_v2ray: ^3.0.0 # ← Mets à jour, 1.0.10 est trop vieux
   cupertino_icons: ^1.0.8
   file_picker: ^8.0.7
   path_provider: ^2.1.4
   share_plus: ^10.0.2
+  flutter_html: ^3.0.0-beta.2 # ← AJOUTE CETTE LIGNE
 
 dev_dependencies:
   flutter_test:
