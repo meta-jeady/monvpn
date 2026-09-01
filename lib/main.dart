@@ -26,9 +26,13 @@ class Kco4pVPNApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0B1426),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF3B82F6),
+          brightness: Brightness.dark,
+          primary: const Color(0xFF3B82F6),
+        ),
       ),
       home: const HomeScreen(),
     );
@@ -239,38 +243,46 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
-  // ==================== IMPORT AMÉLIORÉ ====================
+  // ==================== IMPORT ====================
   Future<void> importConfig() async {
     try {
       addLog("Ouverture du sélecteur de fichiers...");
 
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['kt'],
-        dialogTitle: 'Choisir un fichier KČØ4P (.kt)',
+        type: FileType.any,
+        dialogTitle: 'Choisir un fichier KČØ4P (.kct)',
       );
 
       if (result == null) {
-        addLog("Import annulé par l'utilisateur");
+        addLog("Import annulé");
         return;
       }
 
-      final path = result.files.single.path;
+      final file = result.files.single;
+      final path = file.path;
+
       if (path == null) {
-        addLog("Chemin du fichier introuvable");
+        addLog("Impossible d'accéder au fichier");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Impossible de lire ce fichier")),
+        );
         return;
       }
 
-      final file = File(path);
-      String content = await file.readAsString();
+      if (!path.toLowerCase().endsWith('.kct') && !path.toLowerCase().endsWith('.json')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Choisis un fichier .kct")),
+        );
+        return;
+      }
 
-      // Décodage si le fichier est verrouillé
+      String content = await File(path).readAsString();
+
       if (content.startsWith("KCO4P_LOCKED:")) {
         try {
           content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
-          addLog("Fichier verrouillé détecté → décodage réussi");
+          addLog("Fichier verrouillé → décodé");
         } catch (e) {
-          addLog("Erreur de décodage du fichier verrouillé");
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Fichier verrouillé invalide")),
           );
@@ -280,20 +292,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final map = jsonDecode(content);
 
-      // Vérification que c'est bien un fichier KČØ4P
       if (map["app"] != "KČØ4P VPN") {
-        addLog("Ce fichier n'est pas une configuration KČØ4P");
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Fichier non compatible avec KČØ4P VPN")),
+          const SnackBar(content: Text("Ce fichier n'est pas une config KČØ4P")),
         );
         return;
       }
 
-      // Vérification date d'expiration
       if (map["expire_date"] != null) {
         final expire = DateTime.tryParse(map["expire_date"]);
         if (expire != null && DateTime.now().isAfter(expire)) {
-          addLog("Configuration expirée");
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Cette configuration a expiré")),
           );
@@ -307,17 +315,17 @@ class _HomeScreenState extends State<HomeScreen> {
         configCtrl.text = map["config"] ?? "";
       });
 
-      addLog("Import réussi : ${map["name"] ?? result.files.single.name}");
+      addLog("Import réussi : ${map["name"] ?? file.name}");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Configuration importée : ${map["name"] ?? "Sans nom"}"),
-          backgroundColor: Colors.green,
+          content: Text("Importé : ${map["name"] ?? "Configuration"}"),
+          backgroundColor: const Color(0xFF10B981),
         ),
       );
     } catch (e) {
       addLog("Erreur import : $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Impossible d'importer ce fichier")),
+        SnackBar(content: Text("Erreur : $e")),
       );
     }
   }
@@ -341,11 +349,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0B1426),
       appBar: AppBar(
-        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0F1C2E),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.article_outlined),
@@ -365,20 +375,21 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.black54, fontSize: 13),
+                style: TextStyle(color: Colors.white70, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
+                  dropdownColor: const Color(0xFF1E293B),
                   underline: const SizedBox(),
+                  style: const TextStyle(color: Colors.white),
                   items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
                   onChanged: (value) {
                     if (value != null) {
@@ -393,9 +404,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: Text(
                   statut,
@@ -407,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
               GestureDetector(
                 onTap: enCours ? null : toggle,
                 child: AnimatedContainer(
@@ -416,50 +426,51 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white,
+                    color: const Color(0xFF1E293B),
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
-                      BoxShadow(color: couleur.withOpacity(0.25), blurRadius: 20, spreadRadius: 2)
+                      BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 22, spreadRadius: 3)
                     ],
                   ),
                   child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
+                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.white60, fontSize: 12)),
               ),
               const SizedBox(height: 6),
               TextField(
                 controller: hostCtrl,
+                style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   hintText: "Exemple: yamo.mtn.cm",
+                  hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  fillColor: const Color(0xFF1E293B),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 12),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
+                child: Text("CONFIGURATION", style: TextStyle(color: Colors.white60, fontSize: 12)),
               ),
               const SizedBox(height: 6),
               TextField(
                 controller: configCtrl,
                 maxLines: 3,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
+                  hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  fillColor: const Color(0xFF1E293B),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -468,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.download_rounded, size: 18),
                       label: const Text("Import"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
+                        backgroundColor: const Color(0xFF3B82F6),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -493,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.upload_rounded, size: 18),
                       label: const Text("Export"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F172A),
+                        backgroundColor: const Color(0xFF1E293B),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -503,15 +514,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const Spacer(),
-              const Text("DEV : kcørp tech serf", style: TextStyle(color: Colors.black38, fontSize: 12)),
+              const Text("DEV : kcørp tech serf", style: TextStyle(color: Colors.white38, fontSize: 12)),
             ],
           ),
         ),
       ),
     );
   }
-}
-// ==================== PAGE EXPORT ====================
+  // ==================== PAGE EXPORT ====================
 class ExportPage extends StatefulWidget {
   final String mode;
   final String host;
@@ -560,7 +570,7 @@ class _ExportPageState extends State<ExportPage> {
     }
 
     final directory = await getTemporaryDirectory();
-    final fileName = "${nameCtrl.text.trim().replaceAll(' ', '_')}.kt";
+    final fileName = "${nameCtrl.text.trim().replaceAll(' ', '_')}.kct";
     final file = File("${directory.path}/$fileName");
     await file.writeAsString(content);
 
@@ -573,48 +583,51 @@ class _ExportPageState extends State<ExportPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF0B1426),
       appBar: AppBar(
-        title: const Text("Exporter la configuration"),
-        backgroundColor: Colors.white,
+        title: const Text("Exporter la configuration", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0F1C2E),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Nom de la configuration", style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text("Nom de la configuration", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             TextField(
               controller: nameCtrl,
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: "Ex: Serveur MTN Cameroun",
+                hintStyle: const TextStyle(color: Colors.white38),
                 filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                fillColor: const Color(0xFF1E293B),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               ),
             ),
             const SizedBox(height: 20),
             Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)),
               child: SwitchListTile(
-                title: const Text("Lock config", style: TextStyle(fontWeight: FontWeight.w500)),
-                subtitle: const Text("Configuration verrouillée (recommandé)"),
+                title: const Text("Lock config", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                subtitle: const Text("Configuration verrouillée (recommandé)", style: TextStyle(color: Colors.white54)),
                 value: lockConfig,
-                activeColor: const Color(0xFF2563EB),
+                activeColor: const Color(0xFF3B82F6),
                 onChanged: (v) => setState(() => lockConfig = v),
               ),
             ),
             const SizedBox(height: 12),
             Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)),
               child: Column(
                 children: [
                   SwitchListTile(
-                    title: const Text("Date d'expiration", style: TextStyle(fontWeight: FontWeight.w500)),
+                    title: const Text("Date d'expiration", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
                     value: hasExpire,
-                    activeColor: const Color(0xFF2563EB),
+                    activeColor: const Color(0xFF3B82F6),
                     onChanged: (v) => setState(() => hasExpire = v),
                   ),
                   if (hasExpire)
@@ -623,8 +636,9 @@ class _ExportPageState extends State<ExportPage> {
                         expireDate == null
                             ? "Choisir une date"
                             : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
+                        style: const TextStyle(color: Colors.white70),
                       ),
-                      trailing: const Icon(Icons.calendar_today),
+                      trailing: const Icon(Icons.calendar_today, color: Colors.white70),
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -644,12 +658,12 @@ class _ExportPageState extends State<ExportPage> {
               child: ElevatedButton(
                 onPressed: generateFile,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: const Color(0xFF3B82F6),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text("Générer le fichier .kt", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text("Générer le fichier .kct", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -665,27 +679,28 @@ class LogsScreen extends StatelessWidget {
   const LogsScreen({super.key, required this.logs});
 
   Color _getLogColor(String log) {
-    if (log.contains("ready to use") || log.contains("Import réussi")) return Colors.green;
-    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) return Colors.red;
-    if (log.contains("CONNECTING") || log.contains("CONNEXION")) return Colors.orange;
-    return Colors.black87;
+    if (log.contains("ready to use") || log.contains("Import réussi")) return const Color(0xFF10B981);
+    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) return const Color(0xFFEF4444);
+    if (log.contains("CONNECTING") || log.contains("CONNEXION")) return const Color(0xFFF59E0B);
+    return Colors.white70;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF0B1426),
       appBar: AppBar(
-        title: const Text("Logs"),
-        backgroundColor: Colors.white,
+        title: const Text("Logs", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0F1C2E),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: logs.isEmpty
-          ? const Center(child: Text("Aucun log pour le moment"))
+          ? const Center(child: Text("Aucun log pour le moment", style: TextStyle(color: Colors.white54)))
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: logs.length,
-              separatorBuilder: (_, __) => Divider(color: Colors.grey.shade200, height: 1),
+              separatorBuilder: (_, __) => const Divider(color: Colors.white12, height: 1),
               itemBuilder: (_, i) {
                 final log = logs[i];
                 return Padding(
