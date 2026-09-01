@@ -70,7 +70,6 @@ class _VpnHomePageState extends State<VpnHomePage> {
     String content = const JsonEncoder.withIndent(' ').convert(data);
 
     try {
-      // Sauvegarde dans Téléchargements
       Directory? directory;
       if (Platform.isAndroid) {
         directory = Directory('/storage/emulated/0/Download');
@@ -87,7 +86,6 @@ class _VpnHomePageState extends State<VpnHomePage> {
 
       showSnackBar("Fichier sauvé : Téléchargements/$fileName", successGreen);
 
-      // Partage direct
       await Share.shareXFiles(
         [XFile(file.path)],
         text: "Configuration KČØ4P VPN - ${nameCtrl.text}",
@@ -97,21 +95,26 @@ class _VpnHomePageState extends State<VpnHomePage> {
     }
   }
 
-  // ==================== IMPORT ====================
+  // ==================== IMPORT FIXÉ ANDROID 13+ ====================
   Future<void> importFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['kcvpn'], // SANS POINT !!!
+        type: FileType.any,
       );
 
       if (result != null && result.files.single.path != null) {
-        File file = File(result.files.single.path!);
+        String path = result.files.single.path!;
+        
+        if (!path.toLowerCase().endsWith('.kcvpn')) {
+          showSnackBar("Erreur: Sélectionne un fichier .kcvpn", errorRed);
+          return;
+        }
+        
+        File file = File(path);
         String content = await file.readAsString();
         
         final data = jsonDecode(content);
         
-        // Remplit les champs
         setState(() {
           nameCtrl.text = data['name'] ?? '';
           descCtrl.text = data['description'] ?? '';
@@ -120,14 +123,12 @@ class _VpnHomePageState extends State<VpnHomePage> {
           configCtrl.text = data['config'] ?? '';
         });
 
-        // Affiche le popup HTML
-        showImportDialog(data['name'], data['description']);
-        
+        showImportDialog(data['name'] ?? 'Config', data['description'] ?? '');
         showSnackBar("Import réussi", successGreen);
       }
     } catch (e) {
       print("Erreur import: $e");
-      showSnackBar("Import échoué", errorRed);
+      showSnackBar("Import échoué: $e", errorRed);
     }
   }
 
@@ -141,7 +142,13 @@ class _VpnHomePageState extends State<VpnHomePage> {
           children: [
             Icon(Icons.check_circle, color: successGreen),
             const SizedBox(width: 8),
-            Text(name, style: const TextStyle(color: Colors.white)),
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: SizedBox(
@@ -176,6 +183,15 @@ class _VpnHomePageState extends State<VpnHomePage> {
   }
 
   @override
+  void dispose() {
+    hostCtrl.dispose();
+    configCtrl.dispose();
+    nameCtrl.dispose();
+    descCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bgDark,
@@ -198,7 +214,6 @@ class _VpnHomePageState extends State<VpnHomePage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Dropdown Mode
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               decoration: BoxDecoration(
@@ -220,7 +235,6 @@ class _VpnHomePageState extends State<VpnHomePage> {
             ),
             const SizedBox(height: 16),
 
-            // Status
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -241,18 +255,26 @@ class _VpnHomePageState extends State<VpnHomePage> {
             ),
             const SizedBox(height: 24),
 
-            // Power Button
             GestureDetector(
-              onTap: () => setState(() => isConnected = !isConnected),
+              onTap: () {
+                if (configCtrl.text.trim().isEmpty) {
+                  showSnackBar("Importe une config .kcvpn d'abord", Colors.orange);
+                  return;
+                }
+                setState(() => isConnected = !isConnected);
+              },
               child: Container(
                 width: 140,
                 height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: primaryBlue, width: 3),
+                  border: Border.all(
+                    color: isConnected ? successGreen : primaryBlue,
+                    width: 3,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: primaryBlue.withOpacity(0.5),
+                      color: (isConnected ? successGreen : primaryBlue).withOpacity(0.5),
                       blurRadius: 20,
                       spreadRadius: 5,
                     ),
@@ -261,29 +283,24 @@ class _VpnHomePageState extends State<VpnHomePage> {
                 child: Icon(
                   Icons.power_settings_new,
                   size: 60,
-                  color: primaryBlue,
+                  color: isConnected ? successGreen : primaryBlue,
                 ),
               ),
             ),
             const SizedBox(height: 32),
 
-            // HOST Field
             _buildTextField("HOST / SNI (domaine)", hostCtrl, Icons.dns),
             const SizedBox(height: 12),
 
-            // CONFIG Field
-            _buildTextField("CONFIGURATION", configCtrl, Icons.vpn_key),
+            _buildTextField("CONFIGURATION", configCtrl, Icons.vpn_key, maxLines: 3),
             const SizedBox(height: 12),
 
-            // NAME Field
             _buildTextField("Nom de la config", nameCtrl, Icons.label),
             const SizedBox(height: 12),
 
-            // DESC Field
             _buildTextField("Description HTML", descCtrl, Icons.description, maxLines: 3),
             const SizedBox(height: 24),
 
-            // Buttons
             Row(
               children: [
                 Expanded(
@@ -293,6 +310,7 @@ class _VpnHomePageState extends State<VpnHomePage> {
                     label: const Text("Import"),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryBlue,
+                      foregroundColor: Colors.black,
                       padding: const EdgeInsets.all(16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -318,6 +336,7 @@ class _VpnHomePageState extends State<VpnHomePage> {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -337,7 +356,7 @@ class _VpnHomePageState extends State<VpnHomePage> {
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(color: Colors.white70),
+          labelStyle: const TextStyle(color: Colors.white70),
           prefixIcon: Icon(icon, color: primaryBlue),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(16),
@@ -346,12 +365,3 @@ class _VpnHomePageState extends State<VpnHomePage> {
     );
   }
 }
-  @override
-  void dispose() {
-    hostCtrl.dispose();
-    configCtrl.dispose();
-    nameCtrl.dispose();
-    descCtrl.dispose();
-    super.dispose();
-  }
-} // ← Ferme la classe _VpnHomePageState
