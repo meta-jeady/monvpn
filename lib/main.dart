@@ -6,6 +6,7 @@ import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter_html/flutter_html.dart'; // ← IMPORT HTML
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,9 +27,12 @@ class Kco4pVPNApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0A0E27),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF00D9FF),
+          brightness: Brightness.dark,
+        ),
       ),
       home: const HomeScreen(),
     );
@@ -62,6 +66,13 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
+  static const Color bgDark = Color(0xFF0A0E27);
+  static const Color cardDark = Color(0xFF151933);
+  static const Color accentCyan = Color(0xFF00D9FF);
+  static const Color successGreen = Color(0xFF00E676);
+  static const Color warningOrange = Color(0xFFFFB300);
+  static const Color errorRed = Color(0xFFFF5252);
+
   @override
   void initState() {
     super.initState();
@@ -72,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           if (state == "CONNECTED") {
-            if (statut != "FREE SERF") {
+            if (statut!= "FREE SERF") {
               addLog("→ ready to use");
               statut = "FREE SERF";
               estConnecte = true;
@@ -107,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void addLog(String msg) {
     final time = DateTime.now().toString().substring(11, 19);
     setState(() {
-      logs.add("[$time] $msg");
+      logs.insert(0, "[$time] $msg");
     });
   }
 
@@ -134,8 +145,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-          !raw.startsWith("vmess://") &&
-          !raw.startsWith("trojan://")) {
+       !raw.startsWith("vmess://") &&
+       !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -144,18 +155,18 @@ class _HomeScreenState extends State<HomeScreen> {
       final full = parser.getFullConfiguration();
       final Map<String, dynamic> json = jsonDecode(full);
 
-      if (host.isNotEmpty && json["outbounds"] != null && json["outbounds"].isNotEmpty) {
+      if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
         final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"] ?? {};
-        final network = stream["network"] ?? "ws";
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
 
         if (network == "ws") {
-          stream["wsSettings"] ??= {};
-          stream["wsSettings"]["headers"] ??= {};
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
           stream["wsSettings"]["headers"]["Host"] = host;
           addLog("Host injecté: $host");
         } else if (network == "http" || network == "h2") {
-          stream["httpSettings"] ??= {};
+          stream["httpSettings"]??= {};
           stream["httpSettings"]["host"] = [host];
           addLog("Host HTTP injecté: $host");
         }
@@ -187,19 +198,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (raw.isEmpty) {
       addLog("Aucune configuration");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Colle une configuration d'abord"), backgroundColor: errorRed),
+      );
       return;
     }
 
-    if (modeSelectionne == "UDP" || modeSelectionne == "SlowDNS" || modeSelectionne == "SSH") {
+    if ((modeSelectionne == "VLESS / VMess" ||
+         modeSelectionne == "Trojan" ||
+         modeSelectionne == "SlowDNS") && host.isEmpty) {
+      addLog("Host requis pour ce mode");
+      setState(() {
+        enCours = false;
+        statut = "HOST REQUIS";
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Mets le Host de ton pays d'abord!"),
+          backgroundColor: warningOrange,
+        ),
+      );
+      return;
+    }
+
+    if (modeSelectionne == "UDP" || modeSelectionne == "SSH") {
       addLog("Mode $modeSelectionne pas encore disponible");
-      setState(() => statut = "MODE BIENTÔT DISPO");
+      setState(() {
+        enCours = false;
+        statut = "MODE BIENTÔT DISPO";
+      });
       return;
     }
 
     final config = buildFinalConfig(raw, host);
     if (config == null) {
-      setState(() => statut = "CONFIG INVALIDE");
+      setState(() {
+        enCours = false;
+        statut = "CONFIG INVALIDE";
+      });
       addLog("Configuration invalide");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Lien vless/vmess/trojan invalide"), backgroundColor: errorRed),
+      );
       return;
     }
 
@@ -237,11 +277,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // ==================== IMPORT AVEC HTML DESCRIPTION ====================
   Future<void> importConfig() async {
     try {
+      addLog("Ouverture du sélecteur de fichiers...");
+
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['kt', 'json', 'txt'],
+        allowedExtensions: ['kcvpn'],
+        dialogTitle: 'Choisir un fichier KČØ4P (.kcvpn)',
       );
 
       if (result == null) {
@@ -249,45 +293,120 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      final file = File(result.files.single.path!);
+      final path = result.files.single.path;
+      if (path == null) {
+        addLog("Chemin introuvable");
+        return;
+      }
+
+      final file = File(path);
       String content = await file.readAsString();
 
       if (content.startsWith("KCO4P_LOCKED:")) {
-        content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
-      }
-
-      final map = jsonDecode(content);
-
-      if (map["expire_date"] != null) {
-        final expire = DateTime.tryParse(map["expire_date"]);
-        if (expire != null && DateTime.now().isAfter(expire)) {
-          addLog("Configuration expirée");
+        try {
+          content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
+          addLog("Fichier verrouillé → décodé");
+        } catch (e) {
+          addLog("Erreur décodage");
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Cette configuration a expiré")),
+            const SnackBar(content: Text("Fichier verrouillé invalide"), backgroundColor: errorRed),
           );
           return;
         }
       }
 
+      final map = jsonDecode(content);
+
+      if (map["app"]!= "KČØ4P VPN") {
+        addLog("Fichier non compatible");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Fichier non compatible"), backgroundColor: errorRed),
+        );
+        return;
+      }
+
+      if (map["expire_date"]!= null) {
+        final expire = DateTime.tryParse(map["expire_date"]);
+        if (expire!= null && DateTime.now().isAfter(expire)) {
+          addLog("Configuration expirée");
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Configuration expirée"), backgroundColor: errorRed),
+          );
+          return;
+        }
+      }
+
+      final String configName = map["name"]?? "Sans nom";
+      final String description = map["description"]?? "";
+
+      // ← AFFICHE LA DESCRIPTION EN HTML COULEUR
+      if (description.isNotEmpty) {
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: cardDark,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.info_outline, color: accentCyan, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    configName,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Html(
+                data: description, // ← RENDER HTML ICI
+                style: {
+                  "body": Style(color: Colors.grey.shade300, fontSize: FontSize(14)),
+                  "b": Style(color: accentCyan, fontWeight: FontWeight.bold),
+                  "strong": Style(color: successGreen, fontWeight: FontWeight.bold),
+                  "span": Style(color: warningOrange),
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK", style: TextStyle(color: accentCyan, fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ],
+          ),
+        );
+      }
+
       setState(() {
-        modeSelectionne = map["mode"] ?? "VLESS / VMess";
-        hostCtrl.text = map["host"] ?? "";
-        configCtrl.text = map["config"] ?? "";
+        modeSelectionne = map["mode"]?? "VLESS / VMess";
+        hostCtrl.text = map["host"]?? "";
+        configCtrl.text = map["config"]?? "";
       });
 
-      addLog("Fichier importé : ${result.files.single.name}");
+      addLog("Import réussi : $configName");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Importé : $configName"),
+          backgroundColor: successGreen,
+        ),
+      );
     } catch (e) {
       addLog("Erreur import : $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Import échoué"), backgroundColor: errorRed),
+      );
     }
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF10B981);
-    if (enCours) return const Color(0xFFF59E0B);
-    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
-      return const Color(0xFF6B7280);
+    if (estConnecte) return successGreen;
+    if (enCours) return warningOrange;
+    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC") || statut.contains("REQUIS")) {
+      return errorRed;
     }
-    return const Color(0xFFEF4444);
+    return accentCyan;
   }
 
   @override
@@ -300,14 +419,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: bgDark,
       appBar: AppBar(
-        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: cardDark,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.article_outlined),
+            icon: const Icon(Icons.article_outlined, color: accentCyan),
             onPressed: () {
               Navigator.push(
                 context,
@@ -322,115 +442,159 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              const Text(
-                "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.black54, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  color: cardDark,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: accentCyan.withOpacity(0.3), width: 1),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
                   underline: const SizedBox(),
+                  dropdownColor: cardDark,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                   items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
                   onChanged: (value) {
-                    if (value != null) {
+                    if (value!= null) {
                       setState(() => modeSelectionne = value);
-                      addLog("Mode changé → $value");
+                      addLog("Mode → $value");
                     }
                   },
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 20),
+
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  gradient: LinearGradient(
+                    colors: [cardDark, cardDark.withOpacity(0.6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: couleur.withOpacity(0.5), width: 2),
+                  boxShadow: [
+                    BoxShadow(color: couleur.withOpacity(0.2), blurRadius: 20, spreadRadius: 2)
+                  ],
                 ),
                 child: Text(
                   statut,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: estConnecte ? const Color(0xFF10B981) : couleur,
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
+                    color: couleur,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 30),
+
               GestureDetector(
-                onTap: enCours ? null : toggle,
+                onTap: enCours? null : toggle,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: 140,
-                  height: 140,
+                  duration: const Duration(milliseconds: 300),
+                  width: 160,
+                  height: 160,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white,
+                    gradient: RadialGradient(
+                      colors: [
+                        couleur.withOpacity(0.3),
+                        cardDark,
+                      ],
+                    ),
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
-                      BoxShadow(color: couleur.withOpacity(0.25), blurRadius: 20, spreadRadius: 2)
+                      BoxShadow(
+                        color: couleur.withOpacity(0.4),
+                        blurRadius: 30,
+                        spreadRadius: 5,
+                      )
                     ],
                   ),
-                  child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
+                  child: Icon(
+                    Icons.power_settings_new_rounded,
+                    size: 70,
+                    color: couleur,
+                  ),
                 ),
               ),
-              const SizedBox(height: 18),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.black54, fontSize: 12)),
-              ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 30),
+
               TextField(
                 controller: hostCtrl,
+                style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: "votre host ici ",
+                  labelText: "HOST / SNI (domaine)",
+                  labelStyle: TextStyle(color: Colors.grey.shade400),
+                  hintText: "yamo.mtn.cm",
+                  hintStyle: TextStyle(color: Colors.grey.shade600),
                   filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize: 12)),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: configCtrl,
-                maxLines: 3,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                  fillColor: cardDark,
+                  prefixIcon: Icon(Icons.dns_rounded, color: accentCyan),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: accentCyan.withOpacity(0.2)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: accentCyan, width: 2),
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
+
+              TextField(
+                controller: configCtrl,
+                maxLines: 3,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white70),
+                decoration: InputDecoration(
+                  labelText: "CONFIGURATION",
+                  labelStyle: TextStyle(color: Colors.grey.shade400),
+                  hintText: "vless:// ou vmess:// ou JSON",
+                  hintStyle: TextStyle(color: Colors.grey.shade600),
+                  filled: true,
+                  fillColor: cardDark,
+                  prefixIcon: Icon(Icons.vpn_key_rounded, color: accentCyan),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: accentCyan.withOpacity(0.2)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: accentCyan, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: importConfig,
-                      icon: const Icon(Icons.download_rounded, size: 18),
-                      label: const Text("Import"),
+                      icon: const Icon(Icons.download_rounded, size: 20),
+                      label: const Text("Import", style: TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: accentCyan,
+                        foregroundColor: bgDark,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 8,
+                        shadowColor: accentCyan.withOpacity(0.5),
                       ),
                     ),
                   ),
@@ -449,20 +613,27 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
-                      icon: const Icon(Icons.upload_rounded, size: 18),
-                      label: const Text("Export"),
+                      icon: const Icon(Icons.upload_rounded, size: 20),
+                      label: const Text("Export", style: TextStyle(fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F172A),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: cardDark,
+                        foregroundColor: accentCyan,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: const BorderSide(color: accentCyan, width: 2),
+                        ),
+                        elevation: 0,
                       ),
                     ),
                   ),
                 ],
               ),
               const Spacer(),
-              const Text("DEV : kcørp tech serf", style: TextStyle(color: Colors.black38, fontSize: 12)),
+              Text(
+                "DEV : kcørp tech serf",
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 11, letterSpacing: 1),
+              ),
             ],
           ),
         ),
@@ -471,7 +642,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ==================== PAGE EXPORT ====================
+// ==================== PAGE EXPORT AVEC HTML DESCRIPTION ====================
 class ExportPage extends StatefulWidget {
   final String mode;
   final String host;
@@ -490,9 +661,14 @@ class ExportPage extends StatefulWidget {
 
 class _ExportPageState extends State<ExportPage> {
   final nameCtrl = TextEditingController();
+  final descCtrl = TextEditingController();
   bool lockConfig = true;
   bool hasExpire = false;
   DateTime? expireDate;
+
+  static const Color bgDark = Color(0xFF0A0E27);
+  static const Color cardDark = Color(0xFF151933);
+  static const Color accentCyan = Color(0xFF00D9FF);
 
   Future<void> generateFile() async {
     if (nameCtrl.text.trim().isEmpty) {
@@ -505,22 +681,23 @@ class _ExportPageState extends State<ExportPage> {
     final data = {
       "app": "KČØ4P VPN",
       "name": nameCtrl.text.trim(),
+      "description": descCtrl.text.trim(),
       "mode": widget.mode,
       "host": widget.host,
       "config": widget.config,
       "locked": lockConfig,
-      "expire_date": hasExpire && expireDate != null ? expireDate!.toIso8601String() : null,
+      "expire_date": hasExpire && expireDate!= null? expireDate!.toIso8601String() : null,
       "created_at": DateTime.now().toIso8601String(),
     };
 
-    String content = const JsonEncoder.withIndent('  ').convert(data);
+    String content = const JsonEncoder.withIndent(' ').convert(data);
 
     if (lockConfig) {
       content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
     }
 
     final directory = await getTemporaryDirectory();
-    final fileName = "${nameCtrl.text.trim().replaceAll(' ', '_')}.kt";
+    final fileName = "${nameCtrl.text.trim().replaceAll(' ', '_')}.kcvpn";
     final file = File("${directory.path}/$fileName");
     await file.writeAsString(content);
 
@@ -533,10 +710,10 @@ class _ExportPageState extends State<ExportPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: bgDark,
       appBar: AppBar(
-        title: const Text("Exporter la configuration"),
-        backgroundColor: Colors.white,
+        title: const Text("Exporter la configuration", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: cardDark,
         elevation: 0,
       ),
       body: Padding(
@@ -544,78 +721,124 @@ class _ExportPageState extends State<ExportPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Nom de la configuration", style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text("Nom de la configuration", style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
             const SizedBox(height: 8),
             TextField(
               controller: nameCtrl,
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: "Ex: Serveur MTN Cameroun",
+                hintStyle: TextStyle(color: Colors.grey.shade600),
                 filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                fillColor: cardDark,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: accentCyan.withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: accentCyan, width: 2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            const Text("Description HTML", style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: descCtrl,
+              maxLines: 4,
+              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+              decoration: InputDecoration(
+                hintText: "<b>Serveur Rapide</b><br><span style='color:green'>MTN CI</span>",
+                hintStyle: TextStyle(color: Colors.grey.shade600),
+                filled: true,
+                fillColor: cardDark,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: accentCyan.withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: accentCyan, width: 2),
+                ),
               ),
             ),
             const SizedBox(height: 20),
+
             Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: cardDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accentCyan.withOpacity(0.2)),
+              ),
               child: SwitchListTile(
-                title: const Text("Lock config", style: TextStyle(fontWeight: FontWeight.w500)),
-                subtitle: const Text("Configuration verrouillée (recommandé)"),
+                title: const Text("Lock config", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                subtitle: Text("Configuration verrouillée", style: TextStyle(color: Colors.grey.shade400)),
                 value: lockConfig,
-                activeColor: const Color(0xFF2563EB),
+                activeColor: accentCyan,
                 onChanged: (v) => setState(() => lockConfig = v),
               ),
             ),
             const SizedBox(height: 12),
             Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: cardDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accentCyan.withOpacity(0.2)),
+              ),
               child: Column(
                 children: [
                   SwitchListTile(
-                    title: const Text("Date d'expiration", style: TextStyle(fontWeight: FontWeight.w500)),
+                    title: const Text("Date d'expiration", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
                     value: hasExpire,
-                    activeColor: const Color(0xFF2563EB),
+                    activeColor: accentCyan,
                     onChanged: (v) => setState(() => hasExpire = v),
                   ),
                   if (hasExpire)
                     ListTile(
                       title: Text(
                         expireDate == null
-                            ? "Choisir une date"
-                            : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
+                        ? "Choisir une date"
+                            : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}",
+                        style: const TextStyle(color: Colors.white70),
                       ),
-                      trailing: const Icon(Icons.calendar_today),
+                      trailing: const Icon(Icons.calendar_today, color: accentCyan),
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
                           initialDate: DateTime.now().add(const Duration(days: 30)),
                           firstDate: DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                          builder: (context, child) {
+                            return Theme(
+                              data: ThemeData.dark().copyWith(
+                                colorScheme: const ColorScheme.dark(primary: accentCyan),
+                              ),
+                              child: child!,
+                            );
+                          },
                         );
-                        if (picked != null) setState(() => expireDate = picked);
+                        if (picked!= null) setState(() => expireDate = picked);
                       },
                     ),
                 ],
               ),
             ),
             const Spacer(),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: generateFile,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  backgroundColor: accentCyan,
+                  foregroundColor: bgDark,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 8,
+                  shadowColor: accentCyan.withOpacity(0.5),
                 ),
-                child: const Text(
-                  "Générer le fichier .kt",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                child: const Text("Générer le fichier.kcvpn", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
               ),
             ),
           ],
@@ -630,47 +853,46 @@ class LogsScreen extends StatelessWidget {
   final List<String> logs;
   const LogsScreen({super.key, required this.logs});
 
+  static const Color bgDark = Color(0xFF0A0E27);
+  static const Color cardDark = Color(0xFF151933);
+  static const Color successGreen = Color(0xFF00E676);
+  static const Color warningOrange = Color(0xFFFFB300);
+  static const Color errorRed = Color(0xFFFF5252);
+
   Color _getLogColor(String log) {
-    if (log.contains("ready to use")) return Colors.green;
-    if (log.contains("Erreur") || log.contains("Échec") || log.contains("Failed")) {
-      return Colors.red;
-    }
-    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
-      return Colors.orange;
-    }
-    return Colors.black87;
+    if (log.contains("ready to use") || log.contains("Import réussi")) return successGreen;
+    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) return errorRed;
+    if (log.contains("CONNECTING") || log.contains("CONNEXION")) return warningOrange;
+    return Colors.white70;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: bgDark,
       appBar: AppBar(
-        title: const Text("Logs"),
-        backgroundColor: Colors.white,
+        title: const Text("Logs", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: cardDark,
         elevation: 0,
       ),
       body: logs.isEmpty
-          ? const Center(child: Text("Aucun log pour le moment"))
+      ? Center(child: Text("Aucun log", style: TextStyle(color: Colors.grey.shade600)))
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: logs.length,
-              separatorBuilder: (_, __) => Divider(
-                color: Colors.grey.shade200,
-                height: 1,
-              ),
+              separatorBuilder: (_, __) => Divider(color: Colors.grey.shade900, height: 1),
               itemBuilder: (_, i) {
                 final log = logs[i];
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text(
                     log,
                     style: TextStyle(
                       fontSize: 12,
                       fontFamily: 'monospace',
                       color: _getLogColor(log),
-                      fontWeight: log.contains("ready to use")
-                          ? FontWeight.bold
+                      fontWeight: log.contains("ready to use") || log.contains("Import réussi")
+                      ? FontWeight.bold
                           : FontWeight.normal,
                     ),
                   ),
@@ -680,3 +902,4 @@ class LogsScreen extends StatelessWidget {
     );
   }
 }
+                  
