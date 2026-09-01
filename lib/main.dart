@@ -243,6 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
+
   // ==================== IMPORT ====================
   Future<void> importConfig() async {
     try {
@@ -521,7 +522,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-  // ==================== PAGE EXPORT ====================
+}
+
+// ==================== PAGE EXPORT ====================
 class ExportPage extends StatefulWidget {
   final String mode;
   final String host;
@@ -552,173 +555,169 @@ class _ExportPageState extends State<ExportPage> {
       return;
     }
 
-    final data = {
-      "app": "KČØ4P VPN",
-      "name": nameCtrl.text.trim(),
-      "mode": widget.mode,
-      "host": widget.host,
-      "config": widget.config,
-      "locked": lockConfig,
-      "expire_date": hasExpire && expireDate != null ? expireDate!.toIso8601String() : null,
-      "created_at": DateTime.now().toIso8601String(),
-    };
+    try {
+      final data = {
+        "app": "KČØ4P VPN",
+        "name": nameCtrl.text.trim(),
+        "mode": widget.mode,
+        "host": widget.host,
+        "config": widget.config,
+        "locked": lockConfig,
+        "expire_date": hasExpire && expireDate != null ? expireDate!.toIso8601String() : null,
+        "created_at": DateTime.now().toIso8601String(),
+      };
 
-    String content = const JsonEncoder.withIndent('  ').convert(data);
+      String content = const JsonEncoder.withIndent('  ').convert(data);
 
-    if (lockConfig) {
-      content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
+      if (lockConfig) {
+        content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
+      }
+
+      final fileName = "${nameCtrl.text.trim().replaceAll(' ', '_')}.kct";
+      final directory = await getTemporaryDirectory();
+      final file = File("${directory.path}/$fileName");
+      await file.writeAsString(content);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: "Configuration KČØ4P VPN - ${nameCtrl.text}",
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Fichier créé : $fileName"),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur lors de la création : $e")),
+      );
     }
-
-    final directory = await getTemporaryDirectory();
-    final fileName = "${nameCtrl.text.trim().replaceAll(' ', '_')}.kct";
-    final file = File("${directory.path}/$fileName");
-    await file.writeAsString(content);
-
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: "Configuration KČØ4P VPN - ${nameCtrl.text}",
-    );
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1426),
-      appBar: AppBar(
-        title: const Text("Exporter la configuration", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F1C2E),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFF0B1426),
+    appBar: AppBar(
+      title: const Text(
+        "Exporter la configuration",
+        style: TextStyle(color: Colors.white),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Nom de la configuration", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: nameCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "Ex: Serveur MTN Cameroun",
-                hintStyle: const TextStyle(color: Colors.white38),
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+      backgroundColor: const Color(0xFF0F1C2E),
+      elevation: 0,
+      iconTheme: const IconThemeData(color: Colors.white),
+    ),
+    body: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Nom de la configuration",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: nameCtrl,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: "Ex: Serveur MTN Cameroun",
+              hintStyle: const TextStyle(color: Colors.white38),
+              filled: true,
+              fillColor: const Color(0xFF1E293B),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
               ),
             ),
-            const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)),
-              child: SwitchListTile(
-                title: const Text("Lock config", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                subtitle: const Text("Configuration verrouillée (recommandé)", style: TextStyle(color: Colors.white54)),
-                value: lockConfig,
-                activeColor: const Color(0xFF3B82F6),
-                onChanged: (v) => setState(() => lockConfig = v),
-              ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    title: const Text("Date d'expiration", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                    value: hasExpire,
-                    activeColor: const Color(0xFF3B82F6),
-                    onChanged: (v) => setState(() => hasExpire = v),
+            child: SwitchListTile(
+              title: const Text(
+                "Lock config",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+              subtitle: const Text(
+                "Configuration verrouillée (recommandé)",
+                style: TextStyle(color: Colors.white54),
+              ),
+              value: lockConfig,
+              activeColor: const Color(0xFF3B82F6),
+              onChanged: (v) => setState(() => lockConfig = v),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text(
+                    "Date d'expiration",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                   ),
-                  if (hasExpire)
-                    ListTile(
-                      title: Text(
-                        expireDate == null
-                            ? "Choisir une date"
-                            : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      trailing: const Icon(Icons.calendar_today, color: Colors.white70),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now().add(const Duration(days: 30)),
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                        );
-                        if (picked != null) setState(() => expireDate = picked);
-                      },
-                    ),
-                ],
-              ),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: generateFile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  value: hasExpire,
+                  activeColor: const Color(0xFF3B82F6),
+                  onChanged: (v) => setState(() => hasExpire = v),
                 ),
-                child: const Text("Générer le fichier .kct", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                if (hasExpire)
+                  ListTile(
+                    title: Text(
+                      expireDate == null
+                          ? "Choisir une date"
+                          : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    trailing: const Icon(Icons.calendar_today, color: Colors.white70),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now().add(const Duration(days: 30)),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                      );
+                      if (picked != null) {
+                        setState(() => expireDate = picked);
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: generateFile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3B82F6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                "Générer le fichier .kct",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
-}
-
-// ==================== PAGE LOGS ====================
-class LogsScreen extends StatelessWidget {
-  final List<String> logs;
-  const LogsScreen({super.key, required this.logs});
-
-  Color _getLogColor(String log) {
-    if (log.contains("ready to use") || log.contains("Import réussi")) return const Color(0xFF10B981);
-    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) return const Color(0xFFEF4444);
-    if (log.contains("CONNECTING") || log.contains("CONNEXION")) return const Color(0xFFF59E0B);
-    return Colors.white70;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1426),
-      appBar: AppBar(
-        title: const Text("Logs", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F1C2E),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: logs.isEmpty
-          ? const Center(child: Text("Aucun log pour le moment", style: TextStyle(color: Colors.white54)))
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: logs.length,
-              separatorBuilder: (_, __) => const Divider(color: Colors.white12, height: 1),
-              itemBuilder: (_, i) {
-                final log = logs[i];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    log,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      color: _getLogColor(log),
-                      fontWeight: log.contains("ready to use") || log.contains("Import réussi")
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                );
-              },
-            ),
-    );
-  }
+    ),
+  );
 }
