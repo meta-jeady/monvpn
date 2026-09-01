@@ -8,6 +8,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    
+    <!-- AJOUTÉ : Permissions stockage pour export/import -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <application
         android:label="KČØ4P VPN"
@@ -15,7 +21,8 @@
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true"
-        android:extractNativeLibs="true">
+        android:extractNativeLibs="true"
+        android:requestLegacyExternalStorage="true"> <!-- AJOUTÉ : Force accès Téléchargements -->
 
         <activity
             android:name=".MainActivity"
@@ -36,7 +43,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Pour ouvrir les fichiers .kt depuis WhatsApp / Fichiers -->
+            <!-- FIX : Pour ouvrir les fichiers .kcvpn depuis WhatsApp / Fichiers -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -44,7 +51,7 @@
                 <data android:scheme="file" />
                 <data android:scheme="content" />
                 <data android:mimeType="*/*" />
-                <data android:pathPattern=".*\\.kt" />
+                <data android:pathPattern=".*\\.kcvpn" /> <!-- CHANGÉ : .kt → .kcvpn -->
                 <data android:host="*" />
             </intent-filter>
 
