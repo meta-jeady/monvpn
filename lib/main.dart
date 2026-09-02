@@ -757,12 +757,15 @@ class _HomeScreenState extends State<HomeScreen> {
           foregroundColor: Colors.black54,
         ),
       ),
-      const Spacer(),
+            const Spacer(),
       const Text(
         "DEV : kcørp tech serf",
         style: TextStyle(color: Colors.black38, fontSize: 12),
       ),
     ],
   );
-  }
-  
+  } // Ferme _buildVueImportee()
+
+} // Ferme Widget build(BuildContext context) 
+
+} // Ferme class _HomeScreenState
