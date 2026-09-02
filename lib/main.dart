@@ -148,7 +148,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final full = parser.getFullConfiguration();
       final Map<String, dynamic> json = jsonDecode(full);
 
-      if (host.isNotEmpty && json["outbounds"] != null && json["outbounds"].isNotEmpty) {
+      if (host.isNotEmpty &&
+          json["outbounds"] != null &&
+          json["outbounds"].isNotEmpty) {
         final outbound = json["outbounds"][0];
         final stream = outbound["streamSettings"] ?? {};
         final network = stream["network"] ?? "ws";
@@ -197,7 +199,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (modeSelectionne == "UDP" || modeSelectionne == "SlowDNS" || modeSelectionne == "SSH") {
+    if (modeSelectionne == "UDP" ||
+        modeSelectionne == "SlowDNS" ||
+        modeSelectionne == "SSH") {
       addLog("Mode $modeSelectionne pas encore disponible");
       setState(() => statut = "MODE BIENTÔT DISPO");
       return;
@@ -244,7 +248,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==================== IMPORT ====================
   Future<void> importConfig() async {
     try {
       addLog("Ouverture du sélecteur de fichiers...");
@@ -270,7 +273,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      if (!path.toLowerCase().endsWith('.kct') && !path.toLowerCase().endsWith('.json')) {
+      if (!path.toLowerCase().endsWith('.kct') &&
+          !path.toLowerCase().endsWith('.json')) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Choisis un fichier .kct")),
         );
@@ -281,7 +285,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (content.startsWith("KCO4P_LOCKED:")) {
         try {
-          content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
+          content = utf8.decode(
+              base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
           addLog("Fichier verrouillé → décodé");
         } catch (e) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -295,7 +300,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (map["app"] != "KČØ4P VPN") {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ce fichier n'est pas une config KČØ4P")),
+          const SnackBar(
+              content: Text("Ce fichier n'est pas une config KČØ4P")),
         );
         return;
       }
@@ -352,7 +358,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0B1426),
       appBar: AppBar(
-        title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text(
+          "KČØ4P VPN",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
         centerTitle: true,
         backgroundColor: const Color(0xFF0F1C2E),
         elevation: 0,
@@ -391,7 +400,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   dropdownColor: const Color(0xFF1E293B),
                   underline: const SizedBox(),
                   style: const TextStyle(color: Colors.white),
-                  items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                  items: modes
+                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                      .toList(),
                   onChanged: (value) {
                     if (value != null) {
                       setState(() => modeSelectionne = value);
@@ -430,16 +441,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: const Color(0xFF1E293B),
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
-                      BoxShadow(color: couleur.withOpacity(0.35), blurRadius: 22, spreadRadius: 3)
+                      BoxShadow(
+                        color: couleur.withOpacity(0.35),
+                        blurRadius: 22,
+                        spreadRadius: 3,
+                      )
                     ],
                   ),
-                  child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur),
+                  child: Icon(
+                    Icons.power_settings_new_rounded,
+                    size: 65,
+                    color: couleur,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("HOST (domaine de ton pays)", style: TextStyle(color: Colors.white60, fontSize: 12)),
+                child: Text(
+                  "HOST (domaine de ton pays)",
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
               ),
               const SizedBox(height: 6),
               TextField(
@@ -450,25 +472,38 @@ class _HomeScreenState extends State<HomeScreen> {
                   hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
                   fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("CONFIGURATION", style: TextStyle(color: Colors.white60, fontSize: 12)),
+                child: Text(
+                  "CONFIGURATION",
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
               ),
               const SizedBox(height: 6),
               TextField(
                 controller: configCtrl,
                 maxLines: 3,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
                 decoration: InputDecoration(
                   hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
                   hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
                   fillColor: const Color(0xFF1E293B),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -483,7 +518,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         backgroundColor: const Color(0xFF3B82F6),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
@@ -508,14 +545,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         backgroundColor: const Color(0xFF1E293B),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
               const Spacer(),
-              const Text("DEV : kcørp tech serf", style: TextStyle(color: Colors.white38, fontSize: 12)),
+              const Text(
+                "DEV : kcørp tech serf",
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -563,7 +605,9 @@ class _ExportPageState extends State<ExportPage> {
         "host": widget.host,
         "config": widget.config,
         "locked": lockConfig,
-        "expire_date": hasExpire && expireDate != null ? expireDate!.toIso8601String() : null,
+        "expire_date": hasExpire && expireDate != null
+            ? expireDate!.toIso8601String()
+            : null,
         "created_at": DateTime.now().toIso8601String(),
       };
 
@@ -600,124 +644,186 @@ class _ExportPageState extends State<ExportPage> {
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: const Color(0xFF0B1426),
-    appBar: AppBar(
-      title: const Text(
-        "Exporter la configuration",
-        style: TextStyle(color: Colors.white),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B1426),
+      appBar: AppBar(
+        title: const Text(
+          "Exporter la configuration",
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF0F1C2E),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      backgroundColor: const Color(0xFF0F1C2E),
-      elevation: 0,
-      iconTheme: const IconThemeData(color: Colors.white),
-    ),
-    body: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Nom de la configuration",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: nameCtrl,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: "Ex: Serveur MTN Cameroun",
-              hintStyle: const TextStyle(color: Colors.white38),
-              filled: true,
-              fillColor: const Color(0xFF1E293B),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Nom de la configuration",
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: nameCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: "Ex: Serveur MTN Cameroun",
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: const Color(0xFF1E293B),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: SwitchListTile(
-              title: const Text(
-                "Lock config",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+            const SizedBox(height: 20),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
               ),
-              subtitle: const Text(
-                "Configuration verrouillée (recommandé)",
+              child: SwitchListTile(
+                title: const Text(
+                  "Lock config",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text(
+                  "Configuration verrouillée (recommandé)",
+                  style: TextStyle(color: Colors.white54),
+                ),
+                value: lockConfig,
+                activeColor: const Color(0xFF3B82F6),
+                onChanged: (v) => setState(() => lockConfig = v),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text(
+                      "Date d'expiration",
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                    ),
+                    value: hasExpire,
+                    activeColor: const Color(0xFF3B82F6),
+                    onChanged: (v) => setState(() => hasExpire = v),
+                  ),
+                  if (hasExpire)
+                    ListTile(
+                      title: Text(
+                        expireDate == null
+                            ? "Choisir une date"
+                            : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      trailing: const Icon(Icons.calendar_today, color: Colors.white70),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now().add(const Duration(days: 30)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                        );
+                        if (picked != null) {
+                          setState(() => expireDate = picked);
+                        }
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: generateFile,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Générer le fichier .kct",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== PAGE LOGS ====================
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+  const LogsScreen({super.key, required this.logs});
+
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use") || log.contains("Import réussi")) {
+      return const Color(0xFF10B981);
+    }
+    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) {
+      return const Color(0xFFEF4444);
+    }
+    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
+      return const Color(0xFFF59E0B);
+    }
+    return Colors.white70;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B1426),
+      appBar: AppBar(
+        title: const Text("Logs", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0F1C2E),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: logs.isEmpty
+          ? const Center(
+              child: Text(
+                "Aucun log pour le moment",
                 style: TextStyle(color: Colors.white54),
               ),
-              value: lockConfig,
-              activeColor: const Color(0xFF3B82F6),
-              onChanged: (v) => setState(() => lockConfig = v),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text(
-                    "Date d'expiration",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                  ),
-                  value: hasExpire,
-                  activeColor: const Color(0xFF3B82F6),
-                  onChanged: (v) => setState(() => hasExpire = v),
-                ),
-                if (hasExpire)
-                  ListTile(
-                    title: Text(
-                      expireDate == null
-                          ? "Choisir une date"
-                          : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
-                      style: const TextStyle(color: Colors.white70),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: logs.length,
+              separatorBuilder: (_, __) => const Divider(color: Colors.white12, height: 1),
+              itemBuilder: (_, i) {
+                final log = logs[i];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    log,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: _getLogColor(log),
+                      fontWeight: log.contains("ready to use") || log.contains("Import réussi")
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
-                    trailing: const Icon(Icons.calendar_today, color: Colors.white70),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now().add(const Duration(days: 30)),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                      );
-                      if (picked != null) {
-                        setState(() => expireDate = picked);
-                      }
-                    },
                   ),
-              ],
+                );
+              },
             ),
-          ),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: generateFile,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                "Générer le fichier .kct",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+    );
+  }
 }
