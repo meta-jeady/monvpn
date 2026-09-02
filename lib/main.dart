@@ -1,11 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,12 +22,12 @@ class Kco4pVPNApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B1426),
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFE0F2FE), // Bleu ciel clair
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF3B82F6),
-          brightness: Brightness.dark,
-          primary: const Color(0xFF3B82F6),
+          seedColor: const Color(0xFF0EA5E9), // Bleu ciel
+          primary: const Color(0xFF0EA5E9),
+          secondary: const Color(0xFF22C55E), // Vert
         ),
       ),
       home: const HomeScreen(),
@@ -248,64 +244,73 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // ==================== IMPORT PAR LIEN ====================
   Future<void> importConfig() async {
+    final TextEditingController linkCtrl = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text("Importer une configuration"),
+          content: TextField(
+            controller: linkCtrl,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              hintText: "Colle ici le lien kco4p://...",
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, linkCtrl.text.trim()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Importer"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null || result.isEmpty) {
+      addLog("Import annulé");
+      return;
+    }
+
     try {
-      addLog("Ouverture du sélecteur de fichiers...");
+      String content = result;
 
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        dialogTitle: 'Choisir un fichier KČØ4P (.kct)',
-      );
-
-      if (result == null) {
-        addLog("Import annulé");
-        return;
+      // Si c'est un lien kco4p://
+      if (content.startsWith("kco4p://config/")) {
+        content = content.replaceFirst("kco4p://config/", "");
+        content = utf8.decode(base64.decode(content));
+        addLog("Lien kco4p décodé");
       }
 
-      final file = result.files.single;
-      final path = file.path;
-
-      if (path == null) {
-        addLog("Impossible d'accéder au fichier");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Impossible de lire ce fichier")),
-        );
-        return;
-      }
-
-      if (!path.toLowerCase().endsWith('.kct') &&
-          !path.toLowerCase().endsWith('.json')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Choisis un fichier .kct")),
-        );
-        return;
-      }
-
-      String content = await File(path).readAsString();
-
+      // Si c'est encore verrouillé
       if (content.startsWith("KCO4P_LOCKED:")) {
-        try {
-          content = utf8.decode(
-              base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
-          addLog("Fichier verrouillé → décodé");
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Fichier verrouillé invalide")),
-          );
-          return;
-        }
+        content = utf8.decode(
+            base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
       }
 
       final map = jsonDecode(content);
 
       if (map["app"] != "KČØ4P VPN") {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Ce fichier n'est pas une config KČØ4P")),
+          const SnackBar(content: Text("Lien non compatible avec KČØ4P VPN")),
         );
         return;
       }
 
+      // Vérification expiration
       if (map["expire_date"] != null) {
         final expire = DateTime.tryParse(map["expire_date"]);
         if (expire != null && DateTime.now().isAfter(expire)) {
@@ -322,23 +327,23 @@ class _HomeScreenState extends State<HomeScreen> {
         configCtrl.text = map["config"] ?? "";
       });
 
-      addLog("Import réussi : ${map["name"] ?? file.name}");
+      addLog("Import réussi : ${map["name"] ?? "Configuration"}");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Importé : ${map["name"] ?? "Configuration"}"),
-          backgroundColor: const Color(0xFF10B981),
+          backgroundColor: const Color(0xFF22C55E),
         ),
       );
     } catch (e) {
       addLog("Erreur import : $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur : $e")),
+        const SnackBar(content: Text("Lien invalide")),
       );
     }
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF10B981);
+    if (estConnecte) return const Color(0xFF22C55E); // Vert
     if (enCours) return const Color(0xFFF59E0B);
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
@@ -356,19 +361,18 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1426),
+      backgroundColor: const Color(0xFFE0F2FE),
       appBar: AppBar(
         title: const Text(
           "KČØ4P VPN",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0F1C2E),
+        backgroundColor: const Color(0xFF0EA5E9),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.article_outlined),
+            icon: const Icon(Icons.article_outlined, color: Colors.white),
             onPressed: () {
               Navigator.push(
                 context,
@@ -385,21 +389,19 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: Colors.black54, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
-                  dropdownColor: const Color(0xFF1E293B),
                   underline: const SizedBox(),
-                  style: const TextStyle(color: Colors.white),
                   items: modes
                       .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                       .toList(),
@@ -416,14 +418,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   statut,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: estConnecte ? const Color(0xFF10B981) : couleur,
+                    color: estConnecte ? const Color(0xFF22C55E) : couleur,
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
                   ),
@@ -438,13 +440,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF1E293B),
+                    color: Colors.white,
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
                       BoxShadow(
-                        color: couleur.withOpacity(0.35),
-                        blurRadius: 22,
-                        spreadRadius: 3,
+                        color: couleur.withOpacity(0.3),
+                        blurRadius: 20,
+                        spreadRadius: 2,
                       )
                     ],
                   ),
@@ -460,18 +462,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   "HOST (domaine de ton pays)",
-                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                  style: TextStyle(color: Colors.black54, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 6),
               TextField(
                 controller: hostCtrl,
-                style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: "Exemple: yamo.mtn.cm",
-                  hintStyle: const TextStyle(color: Colors.white38),
+                  hintText: "mettez votre host ici",
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -483,23 +483,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   "CONFIGURATION",
-                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                  style: TextStyle(color: Colors.black54, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 6),
               TextField(
                 controller: configCtrl,
                 maxLines: 3,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                ),
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-                  hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -515,7 +510,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.download_rounded, size: 18),
                       label: const Text("Import"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
+                        backgroundColor: const Color(0xFF0EA5E9),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -539,10 +534,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
-                      icon: const Icon(Icons.upload_rounded, size: 18),
-                      label: const Text("Export"),
+                      icon: const Icon(Icons.link, size: 18),
+                      label: const Text("Export Lien"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
+                        backgroundColor: const Color(0xFF22C55E),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -556,7 +551,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const Spacer(),
               const Text(
                 "DEV : kcørp tech serf",
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: TextStyle(color: Colors.black38, fontSize: 12),
               ),
             ],
           ),
@@ -566,7 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ==================== PAGE EXPORT ====================
+// ==================== PAGE EXPORT (LIEN) ====================
 class ExportPage extends StatefulWidget {
   final String mode;
   final String host;
@@ -588,8 +583,9 @@ class _ExportPageState extends State<ExportPage> {
   bool lockConfig = true;
   bool hasExpire = false;
   DateTime? expireDate;
+  String? generatedLink;
 
-  Future<void> generateFile() async {
+  void generateLink() {
     if (nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Mets un nom à la configuration")),
@@ -597,62 +593,48 @@ class _ExportPageState extends State<ExportPage> {
       return;
     }
 
-    try {
-      final data = {
-        "app": "KČØ4P VPN",
-        "name": nameCtrl.text.trim(),
-        "mode": widget.mode,
-        "host": widget.host,
-        "config": widget.config,
-        "locked": lockConfig,
-        "expire_date": hasExpire && expireDate != null
-            ? expireDate!.toIso8601String()
-            : null,
-        "created_at": DateTime.now().toIso8601String(),
-      };
+    final data = {
+      "app": "KČØ4P VPN",
+      "name": nameCtrl.text.trim(),
+      "mode": widget.mode,
+      "host": widget.host,
+      "config": widget.config,
+      "locked": lockConfig,
+      "expire_date": hasExpire && expireDate != null
+          ? expireDate!.toIso8601String()
+          : null,
+      "created_at": DateTime.now().toIso8601String(),
+    };
 
-      String content = const JsonEncoder.withIndent('  ').convert(data);
+    String content = jsonEncode(data);
 
-      if (lockConfig) {
-        content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
-      }
-
-      final fileName = "${nameCtrl.text.trim().replaceAll(' ', '_')}.kct";
-      final directory = await getTemporaryDirectory();
-      final file = File("${directory.path}/$fileName");
-      await file.writeAsString(content);
-
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: "Configuration KČØ4P VPN - ${nameCtrl.text}",
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Fichier créé : $fileName"),
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur lors de la création : $e")),
-      );
+    if (lockConfig) {
+      content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
     }
+
+    final link = "kco4p://config/${base64.encode(utf8.encode(content))}";
+
+    setState(() {
+      generatedLink = link;
+    });
+
+    Clipboard.setData(ClipboardData(text: link));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Lien copié dans le presse-papiers !"),
+        backgroundColor: Color(0xFF22C55E),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1426),
+      backgroundColor: const Color(0xFFE0F2FE),
       appBar: AppBar(
-        title: const Text(
-          "Exporter la configuration",
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF0F1C2E),
+        title: const Text("Exporter en Lien", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -663,17 +645,15 @@ class _ExportPageState extends State<ExportPage> {
           children: [
             const Text(
               "Nom de la configuration",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: nameCtrl,
-              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: "Ex: Serveur MTN Cameroun",
-                hintStyle: const TextStyle(color: Colors.white38),
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
@@ -683,38 +663,29 @@ class _ExportPageState extends State<ExportPage> {
             const SizedBox(height: 20),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: SwitchListTile(
-                title: const Text(
-                  "Lock config",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                ),
-                subtitle: const Text(
-                  "Configuration verrouillée (recommandé)",
-                  style: TextStyle(color: Colors.white54),
-                ),
+                title: const Text("Lock config"),
+                subtitle: const Text("Configuration verrouillée"),
                 value: lockConfig,
-                activeColor: const Color(0xFF3B82F6),
+                activeColor: const Color(0xFF0EA5E9),
                 onChanged: (v) => setState(() => lockConfig = v),
               ),
             ),
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 children: [
                   SwitchListTile(
-                    title: const Text(
-                      "Date d'expiration",
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                    ),
+                    title: const Text("Date d'expiration"),
                     value: hasExpire,
-                    activeColor: const Color(0xFF3B82F6),
+                    activeColor: const Color(0xFF0EA5E9),
                     onChanged: (v) => setState(() => hasExpire = v),
                   ),
                   if (hasExpire)
@@ -723,9 +694,8 @@ class _ExportPageState extends State<ExportPage> {
                         expireDate == null
                             ? "Choisir une date"
                             : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
-                        style: const TextStyle(color: Colors.white70),
                       ),
-                      trailing: const Icon(Icons.calendar_today, color: Colors.white70),
+                      trailing: const Icon(Icons.calendar_today),
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -741,13 +711,13 @@ class _ExportPageState extends State<ExportPage> {
                 ],
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: generateFile,
+                onPressed: generateLink,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
+                  backgroundColor: const Color(0xFF22C55E),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -755,11 +725,28 @@ class _ExportPageState extends State<ExportPage> {
                   ),
                 ),
                 child: const Text(
-                  "Générer le fichier .kct",
+                  "Générer le lien",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
+            if (generatedLink != null) ...[
+              const SizedBox(height: 20),
+              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(
+                  generatedLink!,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -774,7 +761,7 @@ class LogsScreen extends StatelessWidget {
 
   Color _getLogColor(String log) {
     if (log.contains("ready to use") || log.contains("Import réussi")) {
-      return const Color(0xFF10B981);
+      return const Color(0xFF22C55E);
     }
     if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) {
       return const Color(0xFFEF4444);
@@ -782,30 +769,25 @@ class LogsScreen extends StatelessWidget {
     if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
       return const Color(0xFFF59E0B);
     }
-    return Colors.white70;
+    return Colors.black87;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1426),
+      backgroundColor: const Color(0xFFE0F2FE),
       appBar: AppBar(
         title: const Text("Logs", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0F1C2E),
+        backgroundColor: const Color(0xFF0EA5E9),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: logs.isEmpty
-          ? const Center(
-              child: Text(
-                "Aucun log pour le moment",
-                style: TextStyle(color: Colors.white54),
-              ),
-            )
+          ? const Center(child: Text("Aucun log pour le moment"))
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: logs.length,
-              separatorBuilder: (_, __) => const Divider(color: Colors.white12, height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final log = logs[i];
                 return Padding(
@@ -816,7 +798,8 @@ class LogsScreen extends StatelessWidget {
                       fontSize: 12,
                       fontFamily: 'monospace',
                       color: _getLogColor(log),
-                      fontWeight: log.contains("ready to use") || log.contains("Import réussi")
+                      fontWeight: log.contains("ready to use") ||
+                              log.contains("Import réussi")
                           ? FontWeight.bold
                           : FontWeight.normal,
                     ),
