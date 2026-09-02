@@ -23,11 +23,11 @@ class Kco4pVPNApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFE0F2FE), // Bleu ciel clair
+        scaffoldBackgroundColor: const Color(0xFFE0F2FE),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0EA5E9), // Bleu ciel
+          seedColor: const Color(0xFF0EA5E9),
           primary: const Color(0xFF0EA5E9),
-          secondary: const Color(0xFF22C55E), // Vert
+          secondary: const Color(0xFF22C55E),
         ),
       ),
       home: const HomeScreen(),
@@ -84,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
               estConnecte = true;
               enCours = false;
 
-              // AJOUT: SnackBar vert à la connexion
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Row(
@@ -116,7 +115,6 @@ class _HomeScreenState extends State<HomeScreen> {
             estConnecte = false;
           } else {
             if (estConnecte) {
-              // AJOUT: SnackBar rouge à la déconnexion
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Row(
@@ -303,7 +301,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // MODIFIÉ: Import avec gestion lock + expiration
   Future<void> importConfig() async {
     final TextEditingController linkCtrl = TextEditingController();
 
@@ -348,14 +345,12 @@ class _HomeScreenState extends State<HomeScreen> {
       String content = result;
       bool isLocked = false;
 
-      // Si c'est un lien kco4p://
       if (content.startsWith("kco4p://config/")) {
         content = content.replaceFirst("kco4p://config/", "");
         content = utf8.decode(base64.decode(content));
         addLog("Lien kco4p décodé");
       }
 
-      // Si c'est verrouillé
       if (content.startsWith("KCO4P_LOCKED:")) {
         isLocked = true;
         content = utf8.decode(
@@ -372,7 +367,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Vérification expiration
       DateTime? expireDateTemp;
       if (map["expire_date"]!= null) {
         expireDateTemp = DateTime.tryParse(map["expire_date"]);
@@ -421,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF22C55E); // Vert
+    if (estConnecte) return const Color(0xFF22C55E);
     if (enCours) return const Color(0xFFF59E0B);
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
@@ -554,7 +548,7 @@ class _HomeScreenState extends State<HomeScreen> {
         TextField(
           controller: hostCtrl,
           decoration: InputDecoration(
-            hintText: "Exemple: google.com",
+            hintText: "Exemple: yamo.mtn.cm",
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -771,3 +765,4 @@ class _HomeScreenState extends State<HomeScreen> {
     ],
   );
   }
+  
