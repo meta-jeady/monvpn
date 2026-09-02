@@ -2,9 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:intl/intl.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool configImportee = false;
   bool configLocked = false;
   String configName = "";
-  DateTime? configExpireDate;
+  String configExpireDate = "";
 
   @override
   void initState() {
@@ -116,13 +114,11 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       try {
         if (configLocked && v2rayConfig!= null) {
-          // Config lockée importée
           await v2ray.startV2Ray(
             remark: v2rayConfig!.remark,
             config: v2rayConfig!.getFullConfiguration(),
           );
         } else {
-          // Config normale
           if (hostCtrl.text.isEmpty || configCtrl.text.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Remplis HOST et CONFIGURATION")),
@@ -150,12 +146,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final content = value!.text!;
 
       if (content.startsWith("kco4p://config/KCO4P_LOCKED:")) {
-        // Config lockée
         try {
           final payload = content.split("KCO4P_LOCKED:")[1];
           final parts = payload.split(":");
           final name = parts[0];
-          final expiryMs = parts[1];
+          final expiry = parts[1];
           final configB64 = parts[2];
 
           final decoded = utf8.decode(base64.decode(configB64));
@@ -165,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
             configImportee = true;
             configLocked = true;
             configName = name;
-            configExpireDate = expiryMs.isEmpty? null : DateTime.fromMillisecondsSinceEpoch(int.parse(expiryMs));
+            configExpireDate = expiry;
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -177,11 +172,10 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
       } else if (content.startsWith("vless://") || content.startsWith("vmess://")) {
-        // Lien v2ray normal
         final parsed = FlutterV2ray.parseFromURL(content);
         setState(() {
           hostCtrl.text = parsed.address;
-          configCtrl.text = parsed.id;
+          configCtrl.text = parsed.password;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Config importée")),
@@ -330,8 +324,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildVueImportee() {
     final couleur = estConnecte? const Color(0xFF22C55E) : const Color(0xFFEF4444);
-    final joursRestants = configExpireDate?.difference(DateTime.now()).inDays;
-
     return Column(
       children: [
         Container(
@@ -359,30 +351,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              if (configExpireDate!= null)...[
+              if (configExpireDate.isNotEmpty)...[
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.timer_outlined,
-                      size: 16,
-                      color: (joursRestants!= null && joursRestants <= 3)
-                         ? const Color(0xFFF59E0B)
-                          : Colors.black54,
-                    ),
+                    const Icon(Icons.timer_outlined, size: 16, color: Colors.black54),
                     const SizedBox(width: 4),
                     Text(
-                      "Expire le ${DateFormat('dd/MM/yyyy').format(configExpireDate!)}",
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: (joursRestants!= null && joursRestants <= 3)
-                           ? const Color(0xFFF59E0B)
-                            : Colors.black54,
-                        fontWeight: (joursRestants!= null && joursRestants <= 3)
-                           ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
+                      "Expire le $configExpireDate",
+                      style: const TextStyle(fontSize: 14, color: Colors.black54),
                     ),
                   ],
                 ),
@@ -441,7 +419,7 @@ class _HomeScreenState extends State<HomeScreen> {
               configImportee = false;
               hostCtrl.clear();
               configCtrl.clear();
-              configExpireDate = null;
+              configExpireDate = "";
               statut = "DÉCONNECTÉ";
             });
             v2ray.stopV2Ray();
@@ -496,13 +474,12 @@ class ExportPage extends StatefulWidget {
 
 class _ExportPageState extends State<ExportPage> {
   bool _isLocked = false;
-  String _configName = "KCO4P Config";
-  DateTime? _expiryDate;
+  final _nameCtrl = TextEditingController(text: "KCO4P Config");
+  final _dateCtrl = TextEditingController();
 
   String _generateLink() {
     if (_isLocked) {
-      final expiryMs = _expiryDate?.millisecondsSinceEpoch.toString()?? '';
-      final payload = "$_configName:$expiryMs:${base64.encode(utf8.encode(widget.v2rayLink))}";
+      final payload = "${_nameCtrl.text}:${_dateCtrl.text}:${base64.encode(utf8.encode(widget.v2rayLink))}";
       return "kco4p://config/KCO4P_LOCKED:$payload";
     }
     return widget.v2rayLink;
@@ -518,6 +495,7 @@ class _ExportPageState extends State<ExportPage> {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SwitchListTile(
               title: const Text("Verrouiller la configuration"),
@@ -526,29 +504,26 @@ class _ExportPageState extends State<ExportPage> {
               onChanged: (v) => setState(() => _isLocked = v),
             ),
             if (_isLocked)...[
+              const SizedBox(height: 12),
               TextField(
-                decoration: const InputDecoration(labelText: "Nom de la config"),
-                onChanged: (v) => _configName = v,
-                controller: TextEditingController(text: _configName),
+                controller: _nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: "Nom de la config",
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 12),
-              ListTile(
-                title: Text(_expiryDate == null
-                   ? "Pas de date d'expiration"
-                    : "Expire le ${DateFormat('dd/MM/yyyy').format(_expiryDate!)}"),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now().add(const Duration(days: 30)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (date!= null) setState(() => _expiryDate = date);
-                },
+              TextField(
+                controller: _dateCtrl,
+                decoration: const InputDecoration(
+                  labelText: "Date expiration: 31/12/2026",
+                  border: OutlineInputBorder(),
+                ),
               ),
             ],
             const SizedBox(height: 20),
+            const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -559,22 +534,28 @@ class _ExportPageState extends State<ExportPage> {
               child: SelectableText(_generateLink()),
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: _generateLink()));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Lien copié")),
-                );
-              },
-              icon: const Icon(Icons.copy),
-              label: const Text("Copier le lien"),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _generateLink()));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Lien copié")),
+                  );
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text("Copier le lien"),
+              ),
             ),
             const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () => Share.share(_generateLink()),
-              icon: const Icon(Icons.share),
-              label: const Text("Partager"),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Share.share(_generateLink()),
+                icon: const Icon(Icons.share),
+                label: const Text("Partager"),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E)),
+              ),
             ),
           ],
         ),
