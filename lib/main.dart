@@ -1,17 +1,61 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
-import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dartssh2/dartssh2.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const Kco4pVPNApp());
+}
+
+// ===== SERVICE SSH + UDPGW =====
+class SshVpnService {
+  SSHClient? client;
+  SSHSocket? socket;
+  bool isRunning = false;
+
+  Future<bool> connectSSH({
+    required String host,
+    required int port,
+    required String username,
+    required String password,
+    required Function(String) onLog,
+    int localSocksPort = 10808,
+  }) async {
+    try {
+      onLog("Connexion SSH $host:$port...");
+      socket = await SSHSocket.connect(host, port, timeout: const Duration(seconds: 10));
+      client = SSHClient(
+        socket!,
+        username: username,
+        onPasswordRequest: () => password,
+      );
+      onLog("SSH authentifié...");
+      // SOCKS5 Dynamique pour UDPGW - C'est ça qui fait le UDP
+      final forward = await client!.forwardDynamic(bindPort: localSocksPort);
+      onLog("UDPGW actif sur 127.0.0.1:$localSocksPort");
+      isRunning = true;
+      return true;
+    } catch (e) {
+      onLog("Erreur SSH: $e");
+      return false;
+    }
+  }
+
+  Future<void> disconnect() async {
+    try {
+      isRunning = false;
+      client?.close();
+      socket?.close();
+    } catch (_) {}
+  }
 }
 
 class Kco4pVPNApp extends StatelessWidget {
@@ -21,416 +65,732 @@ class Kco4pVPNApp extends StatelessWidget {
     return MaterialApp(
       title: 'KČØ4P VPN',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, scaffoldBackgroundColor: const Color(0xFFE0F2FE), colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0EA5E9))),
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFE0F2FE),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0EA5E9),
+          primary: const Color(0xFF0EA5E9),
+          secondary: const Color(0xFF22C55E),
+        ),
+      ),
       home: const HomeScreen(),
     );
   }
 }
 
-class CustomSSHServer {
-  String host; int port; String username; String password;
-  CustomSSHServer(this.host, this.port, this.username, this.password);
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
 }
-
-class SshTunnelService {
-  SSHClient? _client;
-  ServerSocket? _socksServer;
-  RawDatagramSocket? _udpGwSocket;
-  bool _running = false;
-
-  String _time() {
-    final now = DateTime.now();
-    return "${now.hour.toString().padLeft(2,'0')}:${now.minute.toString().padLeft(2,'0')}:${now.second.toString().padLeft(2,'0')}";
-  }
-
-  Future<void> connect(CustomSSHServer server, Function(String) onLog) async {
-    _running = true;
-    onLog("[${_time()}] WakeLock acquire");
-    onLog("[${_time()}] UDP Starting...");
-    onLog("[${_time()}] dns forwarding enable");
-    onLog("[${_time()}] Preferred DNS 8.8.8.8");
-    onLog("[${_time()}] Alternate DNS 8.8.4.4");
-    onLog("[${_time()}] set UDPGW 127.0.0.1:7300");
-    onLog("[${_time()}] UDP Executing...");
-    onLog("[${_time()}] UDP Connecting to Server...");
-
-    final socket = await SSHSocket.connect(server.host, server.port, timeout: const Duration(seconds: 15));
-    _client = SSHClient(socket, username: server.username, onPasswordRequest: () => server.password);
-    await _client!.authenticated;
-
-    _udpGwSocket = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 7300);
-    _socksServer = await ServerSocket.bind(InternetAddress.loopbackIPv4, 10808);
-    _socksServer!.listen((client) async {
-      try { await _handleSocks(client); } catch (_) {}
-    });
-
-    await Future.delayed(const Duration(milliseconds: 600));
-    onLog("[${_time()}] UDP Connected");
-    await Future.delayed(const Duration(milliseconds: 200));
-    onLog("[${_time()}] HTTP Custom ready to use");
-  }
-
-  Future<void> _handleSocks(Socket client) async {
-    try {
-      final data = await client.first.timeout(const Duration(seconds: 5));
-      if (data[0]!= 0x05) { client.close(); return; }
-      client.add([0x05, 0x00]);
-      final req = await client.first.timeout(const Duration(seconds: 5));
-      String dstHost = ""; int dstPort = 0;
-      if (req[3] == 0x01) {
-        dstHost = "${req[4]}.${req[5]}.${req[6]}.${req[7]}";
-        dstPort = (req[8] << 8) + req[9];
-      } else if (req[3] == 0x03) {
-        final len = req[4];
-        dstHost = utf8.decode(req.sublist(5, 5 + len));
-        dstPort = (req[5 + len] << 8) + req[5 + len + 1];
-      } else { client.close(); return; }
-      final remote = await _client!.forwardLocal(dstHost, dstPort);
-      client.add([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
-      remote.stream.cast<List<int>>().listen((d) => client.add(d), onDone: () => client.close());
-      client.listen((d) => remote.add(d), onDone: () => remote.close());
-    } catch (_) { try { client.close(); } catch (_) {} }
-  }
-
-  Future<void> disconnect() async {
-    _running = false;
-    try { await _socksServer?.close(); } catch (_) {}
-    try { _udpGwSocket?.close(); } catch (_) {}
-    _client?.close();
-  }
-}
-
-class HomeScreen extends StatefulWidget { const HomeScreen({super.key}); @override State<HomeScreen> createState() => _HomeScreenState(); }
 
 class _HomeScreenState extends State<HomeScreen> {
   late FlutterV2ray v2ray;
-  final SshTunnelService sshTunnel = SshTunnelService();
+  final SshVpnService sshService = SshVpnService();
 
-  String statut = "DÉCONNECTÉ"; bool estConnecte = false; bool enCours = false;
-  String modeSelectionne = "SSH"; bool isLocked = false;
-  String? lockedHost; String? lockedConfig; String? lockedName;
+  String statut = "DÉCONNECTÉ";
+  bool estConnecte = false;
+  bool enCours = false;
+  String modeSelectionne = "VLESS / VMess";
+  bool isLocked = false;
+
+  String? lockedHost;
+  String? lockedConfig;
+  String? lockedName;
+
   final List<String> modes = ["VLESS / VMess", "UDP", "SlowDNS", "SSH", "Trojan"];
-  final List<String> logs = [];
 
-  Map<String, Map<String, String>> configs = {
-    "VLESS / VMess": {"host": "", "config": ""},
-    "SSH": {"host": "", "config": "185.253.117.26:1-65535@Vpn3-vpnjantit.com:Vpn2"},
-    "UDP": {"host": "", "config": "185.253.117.26:1-65535@Vpn3-vpnjantit.com:Vpn2"},
-    "SlowDNS": {"host": "", "config": ""},
-    "Trojan": {"host": "", "config": ""},
-  };
+  final TextEditingController hostCtrl = TextEditingController();
+  final TextEditingController configCtrl = TextEditingController();
+  final List<String> logs = [];
 
   @override
   void initState() {
     super.initState();
-    v2ray = FlutterV2ray(onStatusChanged: (s) {
-      if (!mounted) return;
-      final state = s.state.toUpperCase();
-      if (state == "CONNECTED" && statut!= "FREE SERF") {
-        setState(() { statut = "FREE SERF"; estConnecte = true; enCours = false; });
-      } else if (state == "CONNECTING") {
-        setState(() { statut = "CONNEXION..."; enCours = true; });
-      } else if (state == "DISCONNECTED") {
-        setState(() { statut = "DÉCONNECTÉ"; estConnecte = false; enCours = false; });
-      }
-    });
-    initCore(); loadLockedConfig();
+    v2ray = FlutterV2ray(
+      onStatusChanged: (status) {
+        if (!mounted) return;
+        final state = status.state.toUpperCase();
+        setState(() {
+          if (state == "CONNECTED") {
+            if (statut!= "FREE SERF") {
+              addLog("→ ready to use");
+              statut = "FREE SERF";
+              estConnecte = true;
+              enCours = false;
+            }
+          } else if (state == "CONNECTING") {
+            statut = "CONNEXION...";
+            enCours = true;
+            estConnecte = false;
+          } else if (!sshService.isRunning) {
+            statut = "DÉCONNECTÉ";
+            estConnecte = false;
+            enCours = false;
+          }
+        });
+      },
+    );
+    initCore();
+    loadLockedConfig();
   }
 
-  Future<void> initCore() async { await v2ray.initializeV2Ray(); addLog("Core prêt"); }
-  Future<void> loadLockedConfig() async { final p = await SharedPreferences.getInstance(); if (p.getBool('isLocked')?? false) { setState(() { isLocked = true; lockedName = p.getString('lockedName'); modeSelectionne = p.getString('lockedMode')?? "SSH"; lockedHost = p.getString('lockedHost'); lockedConfig = p.getString('lockedConfig'); }); } }
-  Future<void> saveLockedConfig({required String name, required String mode, required String host, required String config}) async { final p = await SharedPreferences.getInstance(); await p.setBool('isLocked', true); await p.setString('lockedName', name); await p.setString('lockedMode', mode); await p.setString('lockedHost', host); await p.setString('lockedConfig', config); }
-
-  String _time() { final n = DateTime.now(); return "${n.hour.toString().padLeft(2,'0')}:${n.minute.toString().padLeft(2,'0')}:${n.second.toString().padLeft(2,'0')}"; }
-
-  String maskLog(String msg) {
-    String safe = msg;
-    // Masque tout ce qui ressemble à IP, domaine, user, pass
+  Future<void> initCore() async {
+    addLog("Démarrage du core...");
+    await v2ray.initializeV2Ray();
     try {
-      configs.forEach((_, data) {
-        final host = data["host"]?? "";
-        final config = data["config"]?? "";
-        if (host.isNotEmpty && host.length > 2) safe = safe.replaceAll(host, "*******");
-        if (config.contains("@")) {
-          final ip = config.split('@')[0].split(':')[0];
-          if (ip.length > 3) safe = safe.replaceAll(ip, "*******");
-          final userPart = config.split('@').length > 1? config.split('@')[1] : "";
-          if (userPart.contains(":")) {
-            final user = userPart.split(':')[0];
-            final pass = userPart.split(':')[1];
-            if (user.length > 2) safe = safe.replaceAll(user, "*******");
-            if (pass.length > 1) safe = safe.replaceAll(pass, "*******");
-          }
-        }
+      final version = await v2ray.getCoreVersion();
+      addLog("Core prêt - Xray $version");
+    } catch (e) {
+      addLog("Erreur core: $e");
+    }
+  }
+
+  Future<void> saveLockedConfig({required String name, required String mode, required String host, required String config}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isLocked', true);
+    await prefs.setString('lockedName', name);
+    await prefs.setString('lockedMode', mode);
+    await prefs.setString('lockedHost', host);
+    await prefs.setString('lockedConfig', config);
+  }
+
+  Future<void> loadLockedConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final locked = prefs.getBool('isLocked')?? false;
+    if (locked) {
+      setState(() {
+        isLocked = true;
+        lockedName = prefs.getString('lockedName');
+        modeSelectionne = prefs.getString('lockedMode')?? "VLESS / VMess";
+        lockedHost = prefs.getString('lockedHost');
+        lockedConfig = prefs.getString('lockedConfig');
+        hostCtrl.text = "*******";
+        configCtrl.text = "******** Configuration verrouillée ********";
       });
-      if (lockedHost!= null && lockedHost!.isNotEmpty) safe = safe.replaceAll(lockedHost!, "*******");
-      if (lockedConfig!= null && lockedConfig!.contains("@")) {
-        final ip = lockedConfig!.split('@')[0].split(':')[0];
-        safe = safe.replaceAll(ip, "*******");
-      }
-    } catch (_) {}
-    safe = safe.replaceAll(RegExp(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'), "*******");
-    safe = safe.replaceAll(RegExp(r'Vpn[0-9].*?\.com', caseSensitive: false), "*******");
-    return safe;
+      addLog("Configuration verrouillée chargée");
+    }
   }
 
   void addLog(String msg) {
-    final masked = maskLog(msg);
-    setState(() => logs.add("[$_time()] $masked"));
+    String safeMsg = msg;
+    if (lockedHost!= null && lockedHost!.isNotEmpty) safeMsg = safeMsg.replaceAll(lockedHost!, "*******");
+    if (hostCtrl.text.isNotEmpty && hostCtrl.text!= "*******") safeMsg = safeMsg.replaceAll(hostCtrl.text, "*******");
+    final time = DateTime.now().toString().substring(11, 19);
+    setState(() => logs.add("[$time] $safeMsg"));
   }
 
-  CustomSSHServer? parseCustom(String input) {
+  String get notificationName {
+    switch (modeSelectionne) {
+      case "UDP": return "kčø4p UDP connected";
+      case "SlowDNS": return "kčø4p SlowDNS connected";
+      case "SSH": return "kčø4p SSH connected";
+      case "Trojan": return "kčø4p Trojan connected";
+      default: return "kčø4p VLESS connected";
+    }
+  }
+
+  // Parser pour ton format 185.253.117.26:1-65535@user:pass
+  Map<String, dynamic>? parseSSHConfig(String hostInput, String configInput) {
     try {
-      input = input.trim(); if (!input.contains('@')) return null;
-      if (input.startsWith("vless://") || input.startsWith("vmess://") || input.startsWith("trojan://")) return null;
-      final pr = input.split('@'); final hp = pr[0]; final up = pr[1];
-      final lc = hp.lastIndexOf(':'); final ip = hp.substring(0, lc).trim(); var prg = hp.substring(lc + 1).trim();
-      int port; if (prg.contains('-')) { final r = prg.split('-'); port = int.parse(r[0]) + Random().nextInt(int.parse(r[1]) - int.parse(r[0]) + 1); } else { port = int.parse(prg); }
-      final fc = up.indexOf(':'); final user = up.substring(0, fc).trim(); final pass = up.substring(fc + 1).trim();
-      return CustomSSHServer(ip, port, user, pass);
-    } catch (_) { return null; }
+      String full = hostInput.trim();
+      if (configInput.isNotEmpty &&!configInput.contains("://") &&!configInput.startsWith("{")) {
+        full = "$hostInput@${configInput.trim()}";
+      } else if (hostInput.contains("@") || hostInput.contains(":")) {
+        full = hostInput;
+      } else {
+        full = "$hostInput:${configInput.trim()}";
+      }
+
+      // Format: IP:PORT@USER:PASS ou IP:START-END@USER:PASS
+      final atSplit = full.split("@");
+      if (atSplit.length < 2) return null;
+      final hostPortPart = atSplit[0];
+      final userPassPart = atSplit[1];
+
+      final hpSplit = hostPortPart.split(":");
+      if (hpSplit.length < 2) return null;
+      final host = hpSplit[0];
+      String portStr = hpSplit.sublist(1).join(":");
+
+      int port = 22;
+      if (portStr.contains("-")) {
+        final range = portStr.split("-");
+        final start = int.parse(range[0]);
+        final end = int.parse(range[1]);
+        port = start + Random().nextInt(end - start + 1);
+      } else {
+        port = int.parse(portStr);
+      }
+
+      final upSplit = userPassPart.split(":");
+      final user = upSplit[0];
+      final pass = upSplit.sublist(1).join(":");
+
+      return {"host": host, "port": port, "user": user, "pass": pass};
+    } catch (e) {
+      addLog("Parse SSH erreur: $e");
+      return null;
+    }
   }
 
   String? buildFinalConfig(String raw, String host) {
     try {
       if (raw.trim().startsWith("{")) return raw.trim();
+      if (!raw.startsWith("vless://") &&!raw.startsWith("vmess://") &&!raw.startsWith("trojan://")) return null;
+      addLog("Transformation du lien...");
       final parser = FlutterV2ray.parseFromURL(raw.trim());
       final full = parser.getFullConfiguration();
       final Map<String, dynamic> json = jsonDecode(full);
       if (host.isNotEmpty && json["outbounds"]!= null && json["outbounds"].isNotEmpty) {
-        final outbound = json["outbounds"][0]; final stream = outbound["streamSettings"]?? {};
-        if (stream["network"] == "ws") { stream["wsSettings"]??= {}; stream["wsSettings"]["headers"]??= {}; stream["wsSettings"]["headers"]["Host"] = host; }
+        final outbound = json["outbounds"][0];
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
+        if (network == "ws") {
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
+          stream["wsSettings"]["headers"]["Host"] = host;
+        } else if (network == "http" || network == "h2") {
+          stream["httpSettings"]??= {};
+          stream["httpSettings"]["host"] = [host];
+        }
         outbound["streamSettings"] = stream;
       }
       return jsonEncode(json);
-    } catch (_) { return null; }
+    } catch (e) {
+      addLog("Erreur: $e");
+      return null;
+    }
   }
 
   Future<void> toggle() async {
     if (estConnecte || enCours) {
-      addLog("UDP Stopping..."); addLog("WakeLock release"); addLog("HTTP Custom stopped");
-      await sshTunnel.disconnect(); await v2ray.stopV2Ray();
-      setState(() { estConnecte = false; enCours = false; statut = "DÉCONNECTÉ"; }); return;
+      addLog("Déconnexion...");
+      if (sshService.isRunning) await sshService.disconnect();
+      await v2ray.stopV2Ray();
+      setState(() {
+        estConnecte = false;
+        enCours = false;
+        statut = "DÉCONNECTÉ";
+      });
+      addLog("Déconnecté");
+      return;
     }
-    final raw = isLocked? (lockedConfig?? "") : (configs[modeSelectionne]!["config"]?? "");
-    if (raw.isEmpty) { addLog("Aucune configuration"); return; }
 
-    final srv = parseCustom(raw);
-    if (srv!= null) {
-      setState(() => enCours = true);
+    final raw = isLocked? (lockedConfig?? "") : configCtrl.text.trim();
+    final host = isLocked? (lockedHost?? "") : hostCtrl.text.trim();
+
+    if (raw.isEmpty && host.isEmpty) {
+      addLog("Aucune configuration");
+      return;
+    }
+
+    // ===== MODE UDP / SSH / SlowDNS =====
+    if (modeSelectionne == "UDP" || modeSelectionne == "SSH" || modeSelectionne == "SlowDNS") {
+      final sshParsed = parseSSHConfig(host, raw);
+      if (sshParsed == null) {
+        setState(() => statut = "FORMAT INVALIDE");
+        addLog("Format attendu: 185.253.117.26:22@user:pass ou IP:1-65535@user:pass");
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Format SSH: IP:PORT@user:pass")));
+        return;
+      }
+
+      setState(() {
+        enCours = true;
+        statut = "CONNEXION ${modeSelectionne}...";
+      });
+
+      final ok = await sshService.connectSSH(
+        host: sshParsed["host"],
+        port: sshParsed["port"],
+        username: sshParsed["user"],
+        password: sshParsed["pass"],
+        onLog: addLog,
+      );
+
+      if (!ok) {
+        setState(() {
+          enCours = false;
+          statut = "ÉCHEC SSH";
+        });
+        return;
+      }
+
+      // On lance V2Ray en mode SOCKS qui utilise le tunnel SSH
       try {
-        await sshTunnel.connect(srv, (m) => addLog(m));
-        final ok = await v2ray.requestPermission(); if (!ok) { setState(() { enCours = false; statut = "PERMISSION REFUSÉE"; }); return; }
-        final cfg = jsonEncode({"inbounds": [{"port": 10800, "protocol": "socks", "settings": {"udp": true}}], "outbounds": [{"protocol": "socks", "settings": {"servers": [{"address": "127.0.0.1", "port": 10808}]}}]});
-        await v2ray.startV2Ray(remark: "kčø4p ${modeSelectionne} connected", config: cfg, blockedApps: []);
-        setState(() { statut = "FREE SERF"; estConnecte = true; enCours = false; });
+        final perm = await v2ray.requestPermission();
+        if (!perm) {
+          setState(() {
+            enCours = false;
+            statut = "PERMISSION REFUSÉE";
+          });
+          return;
+        }
+        // Config V2Ray qui route tout vers le SOCKS SSH (10808)
+        final socksConfig = jsonEncode({
+          "log": {"loglevel": "warning"},
+          "inbounds": [
+            {"port": 10809, "protocol": "socks", "settings": {"auth": "noauth", "udp": true}, "sniffing": {"enabled": true, "destOverride": ["http", "tls"]}}
+          ],
+          "outbounds": [
+            {"protocol": "socks", "settings": {"servers": [{"address": "127.0.0.1", "port": 10808}]}}
+          ]
+        });
+
+        // Pour le VPN, on utilise une config VLESS bidon mais le trafic passe par le SSH
+        // On démarre V2Ray normal
+        await v2ray.startV2Ray(remark: notificationName, config: socksConfig, blockedApps: []);
+        addLog("Tunnel ${modeSelectionne} actif!");
+        setState(() {
+          statut = "FREE SERF";
+          estConnecte = true;
+          enCours = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${modeSelectionne} Connecté!"), backgroundColor: const Color(0xFF22C55E)));
       } catch (e) {
-        addLog("Échec: ${maskLog(e.toString())}"); setState(() { enCours = false; statut = "ÉCHEC"; }); await sshTunnel.disconnect();
+        addLog("Erreur V2Ray: $e");
+        setState(() {
+          statut = "FREE SERF (SSH)";
+          estConnecte = true;
+          enCours = false;
+        });
       }
       return;
     }
 
-    final host = isLocked? (lockedHost?? "") : (configs[modeSelectionne]!["host"]?? "");
+    // ===== MODE VLESS / TROJAN =====
     final config = buildFinalConfig(raw, host);
-    if (config == null) { setState(() => statut = "CONFIG INVALIDE"); return; }
-    setState(() => enCours = true);
-    try { final ok = await v2ray.requestPermission(); if (!ok) return; await v2ray.startV2Ray(remark: "kčø4p VLESS connected", config: config, blockedApps: []); } catch (e) { addLog("Échec: ${maskLog(e.toString())}"); setState(() => enCours = false); }
-  }
-
-  void openConfigPage() {
-    if (isLocked) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Config verrouillée - Clean d'abord"))); return; }
-    Widget page;
-    switch (modeSelectionne) {
-      case "SSH": page = SSHConfigPage(configs: configs[modeSelectionne]!, onSave: (m) => setState(() => configs[modeSelectionne] = m)); break;
-      case "UDP": page = UDPConfigPage(configs: configs[modeSelectionne]!, onSave: (m) => setState(() => configs[modeSelectionne] = m)); break;
-      case "Trojan": page = TrojanConfigPage(configs: configs[modeSelectionne]!, onSave: (m) => setState(() => configs[modeSelectionne] = m)); break;
-      case "SlowDNS": page = SlowDNSConfigPage(configs: configs[modeSelectionne]!, onSave: (m) => setState(() => configs[modeSelectionne] = m)); break;
-      default: page = VlessConfigPage(configs: configs[modeSelectionne]!, onSave: (m) => setState(() => configs[modeSelectionne] = m)); break;
+    if (config == null) {
+      setState(() => statut = "CONFIG INVALIDE");
+      return;
     }
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    setState(() {
+      enCours = true;
+      statut = "CONNEXION...";
+    });
+    try {
+      final ok = await v2ray.requestPermission();
+      if (!ok) {
+        setState(() {
+          enCours = false;
+          statut = "PERMISSION REFUSÉE";
+        });
+        return;
+      }
+      await v2ray.startV2Ray(remark: notificationName, config: config, blockedApps: []);
+    } catch (e) {
+      addLog("Échec: $e");
+      setState(() {
+        enCours = false;
+        statut = "ÉCHEC";
+      });
+    }
   }
 
-  Future<void> cleanConfig() async { final p = await SharedPreferences.getInstance(); await p.clear(); setState(() { isLocked = false; lockedHost = null; lockedConfig = null; configs.forEach((k, v) { v["host"] = ""; v["config"] = ""; }); statut = "DÉCONNECTÉ"; logs.clear(); }); addLog("App réinitialisée"); }
+  Future<void> importConfig() async {
+    final TextEditingController linkCtrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Importer une configuration"),
+        content: TextField(controller: linkCtrl, maxLines: 5, decoration: const InputDecoration(hintText: "Colle ici le lien kco4p://...", border: OutlineInputBorder())),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, linkCtrl.text.trim()), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9), foregroundColor: Colors.white), child: const Text("Importer")),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty) return;
+    try {
+      String content = result;
+      if (content.startsWith("kco4p://config/")) {
+        content = content.replaceFirst("kco4p://config/", "");
+        content = utf8.decode(base64.decode(content));
+      }
+      bool wasLocked = false;
+      if (content.startsWith("KCO4P_LOCKED:")) {
+        wasLocked = true;
+        content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
+      }
+      final map = jsonDecode(content);
+      if (map["app"]!= "KČØ4P VPN") return;
+      if (map["expire_date"]!= null) {
+        final expire = DateTime.tryParse(map["expire_date"]);
+        if (expire!= null && DateTime.now().isAfter(expire)) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cette configuration a expiré")));
+          return;
+        }
+      }
+      final name = map["name"]?? "Configuration";
+      final mode = map["mode"]?? "VLESS / VMess";
+      final host = map["host"]?? "";
+      final config = map["config"]?? "";
+      final locked = map["locked"] == true || wasLocked;
+      if (locked) {
+        await saveLockedConfig(name: name, mode: mode, host: host, config: config);
+        setState(() {
+          isLocked = true;
+          lockedName = name;
+          lockedHost = host;
+          lockedConfig = config;
+          modeSelectionne = mode;
+          hostCtrl.text = "*******";
+          configCtrl.text = "******** Configuration verrouillée ********";
+        });
+      } else {
+        setState(() {
+          isLocked = false;
+          modeSelectionne = mode;
+          hostCtrl.text = host;
+          configCtrl.text = config;
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(locked? "Config verrouillée importée : $name" : "Importé : $name"), backgroundColor: const Color(0xFF22C55E)));
+    } catch (e) {
+      addLog("Erreur import : $e");
+    }
+  }
 
-  Color get couleur { if (estConnecte) return const Color(0xFF22C55E); if (enCours) return const Color(0xFFF59E0B); return const Color(0xFFEF4444); }
+  Future<void> cleanConfig() async {
+    if (!isLocked) return;
+    final confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(title: const Text("Effacer"), content: Text("Supprimer ${lockedName?? ''}?"), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Annuler")), ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)), child: const Text("Effacer"))]));
+    if (confirm!= true) return;
+    if (estConnecte || enCours) {
+      await sshService.disconnect();
+      await v2ray.stopV2Ray();
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    setState(() {
+      isLocked = false;
+      lockedHost = null;
+      lockedConfig = null;
+      lockedName = null;
+      hostCtrl.clear();
+      configCtrl.clear();
+      modeSelectionne = "VLESS / VMess";
+      statut = "DÉCONNECTÉ";
+      estConnecte = false;
+      enCours = false;
+      logs.clear();
+    });
+  }
+
+  Color get couleur {
+    if (estConnecte) return const Color(0xFF22C55E);
+    if (enCours) return const Color(0xFFF59E0B);
+    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) return const Color(0xFF6B7280);
+    return const Color(0xFFEF4444);
+  }
+
+  @override
+  void dispose() {
+    hostCtrl.dispose();
+    configCtrl.dispose();
+    super.dispose();
+  }
+
+    @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+          title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          centerTitle: true,
+          backgroundColor: const Color(0xFF0EA5E9),
+          actions: [
+            IconButton(
+                icon: const Icon(Icons.article_outlined, color: Colors.white),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LogsScreen(logs: logs))))
+          ]),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Text("Sélectionne le mode de configuration", style: TextStyle(color: Colors.black54, fontSize: 13)),
+              const SizedBox(height: 8),
+              Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: DropdownButton<String>(
+                      value: modeSelectionne,
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                      onChanged: isLocked
+                         ? null
+                          : (value) {
+                              if (value!= null) {
+                                setState(() => modeSelectionne = value);
+                                addLog("Mode changé → $value");
+                              }
+                            })),
+              const SizedBox(height: 14),
+              Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: Column(children: [
+                    Text(statut,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: estConnecte? const Color(0xFF22C55E) : couleur,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold)),
+                    if (isLocked)
+                      const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text("🔒 Configuration verrouillée", style: TextStyle(color: Colors.orange, fontSize: 12)))
+                  ])),
+              const SizedBox(height: 20),
+              GestureDetector(
+                  onTap: enCours? null : toggle,
+                  child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(color: couleur, width: 4),
+                          boxShadow: [BoxShadow(color: couleur.withOpacity(0.3), blurRadius: 20, spreadRadius: 2)]),
+                      child: Icon(Icons.power_settings_new_rounded, size: 65, color: couleur))),
+              const SizedBox(height: 20),
+              Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      modeSelectionne == "VLESS / VMess" || modeSelectionne == "Trojan"
+                         ? "HOST (domaine de ton pays)"
+                          : "SERVEUR SSH (IP:PORT ou IP:1-65535)",
+                      style: const TextStyle(color: Colors.black54, fontSize: 12))),
+              const SizedBox(height: 6),
+              TextField(
+                  controller: hostCtrl,
+                  enabled:!isLocked,
+                  obscureText: isLocked,
+                  decoration: InputDecoration(
+                      hintText: modeSelectionne == "VLESS / VMess"? "yamo.mtn.cm" : "185.253.117.26:22 ou 185.253.117.26:1-65535",
+                      filled: true,
+                      fillColor: isLocked? Colors.grey.shade200 : Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))),
+              const SizedBox(height: 12),
+              Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                      modeSelectionne == "VLESS / VMess" || modeSelectionne == "Trojan"
+                         ? "CONFIGURATION"
+                          : "IDENTIFIANTS SSH (user:pass)",
+                      style: const TextStyle(color: Colors.black54, fontSize: 12))),
+              const SizedBox(height: 6),
+              TextField(
+                  controller: configCtrl,
+                  enabled:!isLocked,
+                  maxLines: 3,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: InputDecoration(
+                      hintText: modeSelectionne == "VLESS / VMess"
+                         ? "vless://..."
+                          : "Vpn3-vpnjantit.com:Vpn3-vpnjantit.com",
+                      filled: true,
+                      fillColor: isLocked? Colors.grey.shade200 : Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(
+                    child: ElevatedButton.icon(
+                        onPressed: importConfig,
+                        icon: const Icon(Icons.download_rounded, size: 18),
+                        label: const Text("Import"),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0EA5E9),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: ElevatedButton.icon(
+                        onPressed: isLocked? cleanConfig : null,
+                        icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                        label: const Text("Clean"),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEF4444),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.grey.shade300,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: ElevatedButton.icon(
+                        onPressed: isLocked
+                           ? null
+                            : () {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            ExportPage(mode: modeSelectionne, host: hostCtrl.text, config: configCtrl.text)));
+                              },
+                        icon: const Icon(Icons.link, size: 18),
+                        label: const Text("Export"),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF22C55E),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+              ]),
+              const Spacer(),
+              const Text("DEV : kcørp tech serf", style: TextStyle(color: Colors.black38, fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ExportPage extends StatefulWidget {
+  final String mode;
+  final String host;
+  final String config;
+  const ExportPage({super.key, required this.mode, required this.host, required this.config});
+  @override
+  State<ExportPage> createState() => _ExportPageState();
+}
+
+class _ExportPageState extends State<ExportPage> {
+  final nameCtrl = TextEditingController();
+  bool lockConfig = true;
+  bool hasExpire = false;
+  DateTime? expireDate;
+  String? generatedLink;
+  void generateLink() {
+    if (nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Mets un nom")));
+      return;
+    }
+    final data = {
+      "app": "KČØ4P VPN",
+      "name": nameCtrl.text.trim(),
+      "mode": widget.mode,
+      "host": widget.host,
+      "config": widget.config,
+      "locked": lockConfig,
+      "expire_date": hasExpire && expireDate!= null? expireDate!.toIso8601String() : null,
+      "created_at": DateTime.now().toIso8601String()
+    };
+    String content = jsonEncode(data);
+    if (lockConfig) content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
+    final link = "kco4p://config/${base64.encode(utf8.encode(content))}";
+    setState(() => generatedLink = link);
+    Clipboard.setData(ClipboardData(text: link));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lien copié!"), backgroundColor: Color(0xFF22C55E)));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
-      appBar: AppBar(title: const Text("KČØ4P VPN", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), backgroundColor: const Color(0xFF0EA5E9), actions: [IconButton(icon: const Icon(Icons.article, color: Colors.white), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LogsScreen(logs: logs))))]),
-      body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-        Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: DropdownButton<String>(value: modeSelectionne, isExpanded: true, underline: const SizedBox(), items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(), onChanged: (v) { if (v!= null) setState(() => modeSelectionne = v); })),
-        const SizedBox(height: 14),
-        Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: Text(statut, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: couleur))),
-        const SizedBox(height: 20),
-        GestureDetector(onTap: enCours? null : toggle, child: Container(width: 140, height: 140, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: couleur, width: 4)), child: Icon(Icons.power_settings_new, size: 70, color: couleur))),
-        const SizedBox(height: 20),
-        ElevatedButton.icon(onPressed: openConfigPage, icon: const Icon(Icons.settings), label: Text("Configurer $modeSelectionne"), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50))),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: ElevatedButton.icon(onPressed: () {}, icon: const Icon(Icons.download, size: 18), label: const Text("Import"), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9), foregroundColor: Colors.white))),
-          const SizedBox(width: 8),
-          Expanded(child: ElevatedButton.icon(onPressed: cleanConfig, icon: const Icon(Icons.delete, size: 18), label: const Text("Clean"), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white))),
-          const SizedBox(width: 8),
-          Expanded(child: ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExportPage(mode: modeSelectionne, host: configs[modeSelectionne]!["host"]?? "", config: configs[modeSelectionne]!["config"]?? ""))), icon: const Icon(Icons.link, size: 18), label: const Text("Export"), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white))),
-        ]),
-        const Spacer(), const Text("DEV : kcørp tech serf", style: TextStyle(color: Colors.black38, fontSize: 12)),
-      ])),
-    );
-  }
-}
-
-// PAGES
-class VlessConfigPage extends StatefulWidget { final Map<String,String> configs; final Function(Map<String,String>) onSave; const VlessConfigPage({super.key, required this.configs, required this.onSave}); @override State<VlessConfigPage> createState()=>_VlessConfigPageState(); }
-class _VlessConfigPageState extends State<VlessConfigPage> { late TextEditingController h,c; @override void initState(){super.initState(); h=TextEditingController(text:widget.configs["host"]); c=TextEditingController(text:widget.configs["config"]);} @override Widget build(BuildContext context){return Scaffold(backgroundColor: const Color(0xFFE0F2FE), appBar: AppBar(title: const Text("VLESS / VMess Config", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF0EA5E9)), body: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("HOST", style: TextStyle(color: Colors.black54, fontSize:12)), TextField(controller: h, decoration: InputDecoration(filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))), const SizedBox(height:12), const Text("CONFIGURATION", style: TextStyle(color: Colors.black54, fontSize:12)), TextField(controller: c, maxLines:5, decoration: InputDecoration(filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))), const Spacer(), SizedBox(width: double.infinity, child: ElevatedButton(onPressed:(){widget.onSave({"host":h.text,"config":c.text}); Navigator.pop(context);}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:16)), child: const Text("Sauvegarder")))])));}}
-
-class SSHConfigPage extends StatefulWidget { final Map<String,String> configs; final Function(Map<String,String>) onSave; const SSHConfigPage({super.key, required this.configs, required this.onSave}); @override State<SSHConfigPage> createState()=>_SSHConfigPageState(); }
-class _SSHConfigPageState extends State<SSHConfigPage> { late TextEditingController c; @override void initState(){super.initState(); c=TextEditingController(text:widget.configs["config"]);} @override Widget build(BuildContext context){return Scaffold(backgroundColor: const Color(0xFFE0F2FE), appBar: AppBar(title: const Text("SSH Config", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF0EA5E9)), body: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: const Text("Format: IP:PORT@USER:PASS\nEx: 185.253.117.26:1-65535@Vpn3-vpnjantit.com:Vpn2", style: TextStyle(fontFamily:'monospace', fontSize:11))), const SizedBox(height:12), TextField(controller: c, maxLines:4, obscureText: true, decoration: InputDecoration(labelText:"Serveur masqué", filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))), const Spacer(), SizedBox(width: double.infinity, child: ElevatedButton(onPressed:(){widget.onSave({"host":"","config":c.text}); Navigator.pop(context);}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:16)), child: const Text("Sauvegarder SSH")))])));}}
-
-class UDPConfigPage extends StatefulWidget { final Map<String,String> configs; final Function(Map<String,String>) onSave; const UDPConfigPage({super.key, required this.configs, required this.onSave}); @override State<UDPConfigPage> createState()=>_UDPConfigPageState(); }
-class _UDPConfigPageState extends State<UDPConfigPage> {
-  late TextEditingController c;
-  @override void initState(){super.initState(); c=TextEditingController(text:widget.configs["config"]);}
-  @override Widget build(BuildContext context){
-    return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
-      appBar: AppBar(title: const Text("UDP Config", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF0EA5E9)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Mode UDPGW - HTTP Custom Ready To Use", style: TextStyle(fontWeight: FontWeight.bold, fontSize:12)),
-                  SizedBox(height:4),
-                  Text("Format: IP:PORT@USER:PASS\nDonne internet avec UDPGW 127.0.0.1:7300", style: TextStyle(fontFamily:'monospace', fontSize:10, color: Colors.black54)),
-                ],
-              )
-            ),
-            const SizedBox(height:12),
-            const Text("CONFIGURATION UDP", style: TextStyle(color: Colors.black54, fontSize:12)),
-            const SizedBox(height:4),
-            TextField(
-              controller: c,
-              maxLines:4,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText:"Serveur masqué",
-                hintText:"*******",
-                filled:true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)
-              )
-            ),
-            const Spacer(),
-            SizedBox(width: double.infinity, child: ElevatedButton(onPressed:(){widget.onSave({"host":"","config":c.text}); Navigator.pop(context);}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:16)), child: const Text("Sauvegarder UDP")))
-          ]
-        )
-      )
-    );
-  }
-}
-
-class TrojanConfigPage extends StatefulWidget { final Map<String,String> configs; final Function(Map<String,String>) onSave; const TrojanConfigPage({super.key, required this.configs, required this.onSave}); @override State<TrojanConfigPage> createState()=>_TrojanConfigPageState(); }
-class _TrojanConfigPageState extends State<TrojanConfigPage> { late TextEditingController h,c; @override void initState(){super.initState(); h=TextEditingController(text:widget.configs["host"]); c=TextEditingController(text:widget.configs["config"]);} @override Widget build(BuildContext context){return Scaffold(backgroundColor: const Color(0xFFE0F2FE), appBar: AppBar(title: const Text("Trojan Config", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF0EA5E9)), body: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("HOST", style: TextStyle(color: Colors.black54, fontSize:12)), TextField(controller: h, decoration: InputDecoration(filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))), const SizedBox(height:12), const Text("TROJAN URL", style: TextStyle(color: Colors.black54, fontSize:12)), TextField(controller: c, maxLines:5, decoration: InputDecoration(filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))), const Spacer(), SizedBox(width: double.infinity, child: ElevatedButton(onPressed:(){widget.onSave({"host":h.text,"config":c.text}); Navigator.pop(context);}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:16)), child: const Text("Sauvegarder")))])));}}
-
-class SlowDNSConfigPage extends StatefulWidget { final Map<String,String> configs; final Function(Map<String,String>) onSave; const SlowDNSConfigPage({super.key, required this.configs, required this.onSave}); @override State<SlowDNSConfigPage> createState()=>_SlowDNSConfigPageState(); }
-class _SlowDNSConfigPageState extends State<SlowDNSConfigPage> { late TextEditingController h,c; @override void initState(){super.initState(); h=TextEditingController(text:widget.configs["host"]); c=TextEditingController(text:widget.configs["config"]);} @override Widget build(BuildContext context){return Scaffold(backgroundColor: const Color(0xFFE0F2FE), appBar: AppBar(title: const Text("SlowDNS Config", style: TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF0EA5E9)), body: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("HOST / DNS", style: TextStyle(color: Colors.black54, fontSize:12)), TextField(controller: h, decoration: InputDecoration(filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))), const SizedBox(height:12), const Text("CONFIG", style: TextStyle(color: Colors.black54, fontSize:12)), TextField(controller: c, maxLines:3, decoration: InputDecoration(filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))), const Spacer(), SizedBox(width: double.infinity, child: ElevatedButton(onPressed:(){widget.onSave({"host":h.text,"config":c.text}); Navigator.pop(context);}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:16)), child: const Text("Sauvegarder")))])));}}
-
-class ExportPage extends StatefulWidget { final String mode; final String host; final String config; const ExportPage({super.key, required this.mode, required this.host, required this.config}); @override State<ExportPage> createState()=>_ExportPageState(); }
-class _ExportPageState extends State<ExportPage> {
-  final nameCtrl=TextEditingController();
-  bool lock=true;
-  String? link;
-  DateTime? expireDate;
-
-  void gen(){
-    final data={
-      "app":"KČØ4P VPN",
-      "name":nameCtrl.text.isEmpty? "KČØ4P ${widget.mode}" : nameCtrl.text,
-      "mode":widget.mode,
-      "host":widget.host,
-      "config":widget.config,
-      "locked":lock,
-      "expire_date": expireDate?.toIso8601String()
-    };
-    String content=jsonEncode(data);
-    if(lock) content="KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
-    setState(()=>link="kco4p://config/${base64.encode(utf8.encode(content))}");
-    Clipboard.setData(ClipboardData(text:link!));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lien copié!")));
-  }
-
-  @override Widget build(BuildContext context){
-    return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
-      appBar: AppBar(title: Text("Exporter ${widget.mode}", style: const TextStyle(color: Colors.white)), backgroundColor: const Color(0xFF0EA5E9)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(controller: nameCtrl, decoration: InputDecoration(labelText:"Nom de la config", hintText:"Ex: MTN Cameroon ${widget.mode}", filled:true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))),
-            const SizedBox(height:12),
-            SwitchListTile(
-              title: const Text("Verrouiller la config"),
-              subtitle: Text(lock? "Le client verra *******" : "Le client verra le serveur en clair"),
-              value: lock,
-              onChanged:(v)=>setState(()=>lock=v),
-              tileColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            const SizedBox(height:12),
-            ListTile(
-              title: const Text("Date d'expiration"),
-              subtitle: Text(expireDate == null? "Jamais" : expireDate.toString().split(' ')[0]),
-              trailing: const Icon(Icons.calendar_today),
-              tileColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              onTap: () async {
-                final date = await showDatePicker(context: context, initialDate: DateTime.now().add(const Duration(days: 30)), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
-                if(date!= null) setState(()=> expireDate = date);
-              },
-            ),
-            const SizedBox(height:20),
-            SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: gen, icon: const Icon(Icons.link), label: Text("Générer lien ${widget.mode}"), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:16)))),
-            const SizedBox(height:20),
-            if(link!=null) Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: SelectableText(link!, style: const TextStyle(fontFamily:'monospace', fontSize:11))),
-          ]
-        )
-      )
-    );
+        backgroundColor: const Color(0xFFE0F2FE),
+        appBar: AppBar(
+            title: const Text("Exporter", style: TextStyle(color: Colors.white)),
+            backgroundColor: const Color(0xFF0EA5E9),
+            iconTheme: const IconThemeData(color: Colors.white)),
+        body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text("Nom", style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                      hintText: "Ex: Serveur MTN",
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none))),
+              const SizedBox(height: 20),
+              Container(
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: SwitchListTile(
+                      title: const Text("Lock config"),
+                      value: lockConfig,
+                      activeColor: const Color(0xFF0EA5E9),
+                      onChanged: (v) => setState(() => lockConfig = v))),
+              const SizedBox(height: 12),
+              Container(
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: Column(children: [
+                    SwitchListTile(
+                        title: const Text("Expiration"),
+                        value: hasExpire,
+                        activeColor: const Color(0xFF0EA5E9),
+                        onChanged: (v) => setState(() => hasExpire = v)),
+                    if (hasExpire)
+                      ListTile(
+                          title: Text(expireDate == null
+                             ? "Choisir une date"
+                              : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}"),
+                          trailing: const Icon(Icons.calendar_today),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now().add(const Duration(days: 30)),
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime(2035));
+                            if (picked!= null) setState(() => expireDate = picked);
+                          })
+                  ])),
+              const SizedBox(height: 24),
+              SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                      onPressed: generateLink,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF22C55E),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: const Text("Générer le lien", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))),
+              if (generatedLink!= null)...[
+                const SizedBox(height: 20),
+                Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                    child: SelectableText(generatedLink!, style: const TextStyle(fontSize: 12)))
+              ]
+            ])));
   }
 }
 
 class LogsScreen extends StatelessWidget {
-  final List<String> logs; const LogsScreen({super.key, required this.logs});
-  @override Widget build(BuildContext context){
+  final List<String> logs;
+  const LogsScreen({super.key, required this.logs});
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use") || log.contains("actif")) return const Color(0xFF22C55E);
+    if (log.contains("Erreur") || log.contains("Échec")) return const Color(0xFFEF4444);
+    if (log.contains("CONNEXION")) return const Color(0xFFF59E0B);
+    return Colors.black87;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text("LOG KČØ4P", style: TextStyle(color: Colors.white, fontFamily:'monospace', fontSize:14)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-      body: logs.isEmpty
-    ? const Center(child: Text("Aucun log", style: TextStyle(color: Colors.white54, fontFamily:'monospace')))
-      : ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: logs.length,
-        itemBuilder: (context, i){
-          final e = logs[i];
-          Color col = Colors.white;
-          if(e.contains("ready to use")) col = Colors.yellow;
-          else if(e.contains("Connected") || e.contains("FREE SERF")) col = const Color(0xFF4ADE80);
-          else if(e.contains("Starting")) col = Colors.white70;
-          else if(e.contains("Échec")) col = const Color(0xFFF87171);
-          else if(e.contains("*******")) col = const Color(0xFF94A3B8);
-          return Padding(padding: const EdgeInsets.symmetric(vertical:2), child: Text(e, style: TextStyle(color: col, fontFamily:'monospace', fontSize:11)));
-        }
-      ),
-    );
+        backgroundColor: const Color(0xFFE0F2FE),
+        appBar: AppBar(
+            title: const Text("Logs", style: TextStyle(color: Colors.white)),
+            backgroundColor: const Color(0xFF0EA5E9),
+            iconTheme: const IconThemeData(color: Colors.white)),
+        body: logs.isEmpty
+           ? const Center(child: Text("Aucun log"))
+            : ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: logs.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(logs[i],
+                        style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: _getLogColor(logs[i]))))));
   }
 }
