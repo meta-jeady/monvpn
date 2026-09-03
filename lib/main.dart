@@ -122,7 +122,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final locked = prefs.getBool('isLocked')?? false;
 
     if (locked) {
-      // Vérif expiration au démarrage
       final expireDateStr = prefs.getString('lockedExpireDate');
       if (expireDateStr!= null && expireDateStr.isNotEmpty) {
         final expire = DateTime.tryParse(expireDateStr);
@@ -324,7 +323,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> toggle() async {
     if (enCours) return;
 
-    // Vérif expiration AVANT de se connecter
     if (!estConnecte && isLocked) {
       final prefs = await SharedPreferences.getInstance();
       final expireDateStr = prefs.getString('lockedExpireDate');
@@ -352,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: Color(0xFFEF4444),
             ),
           );
-          return; // Bloque la connexion
+          return;
         }
       }
     }
@@ -426,19 +424,136 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0EA5E9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.security, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              "À propos",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "KČØ4P VPN",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0EA5E9),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Version 1.0.0",
+              style: TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            const Divider(height: 24),
+            const Text(
+              "Développé par",
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              "Kcørp Tech",
+              style: TextStyle(fontSize: 15),
+            ),
+            const Text(
+              "Jeune développeur passionné\nRésidant au Cameroun 🇨🇲",
+              style: TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Contact",
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(const ClipboardData(text: "+237687960259"));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Numéro copié")),
+                );
+              },
+              child: const Row(
+                children: [
+                  Icon(Icons.phone, size: 16, color: Color(0xFF0EA5E9)),
+                  SizedBox(width: 8),
+                  Text("+237 687 960 259"),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(const ClipboardData(text: "+237680370344"));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Numéro copié")),
+                );
+              },
+              child: const Row(
+                children: [
+                  Icon(Icons.phone, size: 16, color: Color(0xFF0EA5E9)),
+                  SizedBox(width: 8),
+                  Text("+237 680 370 344"),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "© 2026 Kcørp Tech. Tous droits réservés.",
+              style: TextStyle(color: Colors.black38, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Fermer"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFE0F2FE),
       appBar: AppBar(
         title: const Text(
-          "KMER TUNNEL",
+          "KČØ4P VPN",
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         backgroundColor: const Color(0xFF0EA5E9),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.white),
+            onPressed: showAboutDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.article_outlined, color: Colors.white),
             onPressed: () {
@@ -474,13 +589,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     isExpanded: true,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     items: ["VLESS / VMess", "Hysteria 2"]
-                      .map((e) => DropdownMenuItem(
+                     .map((e) => DropdownMenuItem(
                               value: e,
                               child: Text(e),
                             ))
-                      .toList(),
+                     .toList(),
                     onChanged: isLocked
-                      ? null
+                     ? null
                         : (v) {
                             if (v!= null) {
                               setState(() => modeSelectionne = v);
@@ -557,7 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               TextField(
                 controller: hostCtrl,
-                enabled:!isLocked,
+                enabled: !isLocked,
                 decoration: InputDecoration(
                   hintText: "exemple.com ou IP",
                   filled: true,
@@ -576,7 +691,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               TextField(
                 controller: configCtrl,
-                enabled:!isLocked,
+                enabled: !isLocked,
                 maxLines: 3,
                 style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
@@ -628,7 +743,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: isLocked
-                       ? null
+                        ? null
                           : () {
                               Navigator.push(
                                 context,
@@ -657,7 +772,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const Spacer(),
               const Text(
-                "DEV : kcørp tech serf +237687960259/680370344🇨🇲",
+                "DEV : kcørp tech serf",
                 style: TextStyle(color: Colors.black38, fontSize: 12),
               ),
             ],
