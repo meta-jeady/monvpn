@@ -78,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           if (state == "CONNECTED") {
-            if (statut != "FREE SERF") {
+            if (statut!= "FREE SERF") {
               addLog("→ ready to use");
               statut = "FREE SERF";
               estConnecte = true;
@@ -135,13 +135,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> loadLockedConfig() async {
     final prefs = await SharedPreferences.getInstance();
-    final locked = prefs.getBool('isLocked') ?? false;
+    final locked = prefs.getBool('isLocked')?? false;
 
     if (locked) {
       setState(() {
         isLocked = true;
         lockedName = prefs.getString('lockedName');
-        modeSelectionne = prefs.getString('lockedMode') ?? "VLESS / VMess";
+        modeSelectionne = prefs.getString('lockedMode')?? "VLESS / VMess";
         lockedHost = prefs.getString('lockedHost');
         lockedConfig = prefs.getString('lockedConfig');
         hostCtrl.text = "*******";
@@ -153,10 +153,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void addLog(String msg) {
     String safeMsg = msg;
-    if (lockedHost != null && lockedHost!.isNotEmpty) {
+    if (lockedHost!= null && lockedHost!.isNotEmpty) {
       safeMsg = safeMsg.replaceAll(lockedHost!, "*******");
     }
-    if (hostCtrl.text.isNotEmpty && hostCtrl.text != "*******") {
+    if (hostCtrl.text.isNotEmpty && hostCtrl.text!= "*******") {
       safeMsg = safeMsg.replaceAll(hostCtrl.text, "*******");
     }
 
@@ -189,8 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-          !raw.startsWith("vmess://") &&
-          !raw.startsWith("trojan://")) {
+         !raw.startsWith("vmess://") &&
+         !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -200,19 +200,19 @@ class _HomeScreenState extends State<HomeScreen> {
       final Map<String, dynamic> json = jsonDecode(full);
 
       if (host.isNotEmpty &&
-          json["outbounds"] != null &&
+          json["outbounds"]!= null &&
           json["outbounds"].isNotEmpty) {
         final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"] ?? {};
-        final network = stream["network"] ?? "ws";
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
 
         if (network == "ws") {
-          stream["wsSettings"] ??= {};
-          stream["wsSettings"]["headers"] ??= {};
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
           stream["wsSettings"]["headers"]["Host"] = host;
           addLog("Host injecté: *******");
         } else if (network == "http" || network == "h2") {
-          stream["httpSettings"] ??= {};
+          stream["httpSettings"]??= {};
           stream["httpSettings"]["host"] = [host];
           addLog("Host HTTP injecté: *******");
         }
@@ -239,8 +239,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final raw = isLocked ? (lockedConfig ?? "") : configCtrl.text.trim();
-    final host = isLocked ? (lockedHost ?? "") : hostCtrl.text.trim();
+    final raw = isLocked? (lockedConfig?? "") : configCtrl.text.trim();
+    final host = isLocked? (lockedHost?? "") : hostCtrl.text.trim();
 
     if (raw.isEmpty) {
       addLog("Aucune configuration");
@@ -355,16 +355,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final map = jsonDecode(content);
 
-      if (map["app"] != "KČØ4P VPN") {
+      if (map["app"]!= "KČØ4P VPN") {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Lien non compatible")),
         );
         return;
       }
 
-      if (map["expire_date"] != null) {
+      if (map["expire_date"]!= null) {
         final expire = DateTime.tryParse(map["expire_date"]);
-        if (expire != null && DateTime.now().isAfter(expire)) {
+        if (expire!= null && DateTime.now().isAfter(expire)) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Cette configuration a expiré")),
           );
@@ -372,10 +372,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      final name = map["name"] ?? "Configuration";
-      final mode = map["mode"] ?? "VLESS / VMess";
-      final host = map["host"] ?? "";
-      final config = map["config"] ?? "";
+      final name = map["name"]?? "Configuration";
+      final mode = map["mode"]?? "VLESS / VMess";
+      final host = map["host"]?? "";
+      final config = map["config"]?? "";
       final locked = map["locked"] == true || wasLocked;
 
       if (locked) {
@@ -410,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-              ? "Config verrouillée importée : $name"
+             ? "Config verrouillée importée : $name"
               : "Importé : $name"),
           backgroundColor: const Color(0xFF22C55E),
         ),
@@ -421,6 +421,70 @@ class _HomeScreenState extends State<HomeScreen> {
         const SnackBar(content: Text("Lien invalide")),
       );
     }
+  }
+
+  Future<void> cleanConfig() async {
+    if (!isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Aucune configuration verrouillée à effacer")),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Effacer la configuration"),
+        content: Text(
+          "Supprimer définitivement la configuration \"${lockedName?? 'verrouillée'}\"?\n\nL'app redeviendra vierge.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Effacer"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm!= true) return;
+
+    if (estConnecte || enCours) {
+      await v2ray.stopV2Ray();
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    setState(() {
+      isLocked = false;
+      lockedHost = null;
+      lockedConfig = null;
+      lockedName = null;
+      hostCtrl.clear();
+      configCtrl.clear();
+      modeSelectionne = "VLESS / VMess";
+      statut = "DÉCONNECTÉ";
+      estConnecte = false;
+      enCours = false;
+      logs.clear();
+    });
+
+    addLog("App réinitialisée - configuration supprimée");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Configuration effacée. App vierge."),
+        backgroundColor: Color(0xFFEF4444),
+      ),
+    );
   }
 
   Color get couleur {
@@ -484,12 +548,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   isExpanded: true,
                   underline: const SizedBox(),
                   items: modes
-                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                      .toList(),
+                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                     .toList(),
                   onChanged: isLocked
-                      ? null
+                     ? null
                       : (value) {
-                          if (value != null) {
+                          if (value!= null) {
                             setState(() => modeSelectionne = value);
                             addLog("Mode changé → $value");
                           }
@@ -510,7 +574,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       statut,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: estConnecte ? const Color(0xFF22C55E) : couleur,
+                        color: estConnecte? const Color(0xFF22C55E) : couleur,
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
@@ -528,7 +592,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 20),
               GestureDetector(
-                onTap: enCours ? null : toggle,
+                onTap: enCours? null : toggle,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: 140,
@@ -563,12 +627,12 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               TextField(
                 controller: hostCtrl,
-                enabled: !isLocked,
+                enabled:!isLocked,
                 obscureText: isLocked,
                 decoration: InputDecoration(
                   hintText: "Exemple: yamo.mtn.cm",
                   filled: true,
-                  fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
+                  fillColor: isLocked? Colors.grey.shade200 : Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -583,6 +647,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(color: Colors.black54, fontSize: 12),
                 ),
               ),
+              
               const SizedBox(height: 6),
               TextField(
                 controller: configCtrl,
@@ -617,7 +682,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: isLocked ? cleanConfig : null,
+                      icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                      label: const Text("Clean"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEF4444),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade300,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: isLocked
@@ -635,7 +717,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               );
                             },
                       icon: const Icon(Icons.link, size: 18),
-                      label: const Text("Export Lien"),
+                      label: const Text("Export"),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF22C55E),
                         foregroundColor: Colors.white,
@@ -793,7 +875,7 @@ class _ExportPageState extends State<ExportPage> {
                       title: Text(
                         expireDate == null
                             ? "Choisir une date"
-                            : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
+                            : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}",
                       ),
                       trailing: const Icon(Icons.calendar_today),
                       onTap: () async {
