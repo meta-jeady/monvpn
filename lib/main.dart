@@ -1,14 +1,13 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// 🔒 Variable globale = si config importée = tout est locké À VIE
+bool globalConfigLockee = false;
 
 void main() {
   runApp(const KCO4PApp());
 }
-
-// 🔒 Variable globale = si config importée = tout est locké
-bool globalConfigLockee = false;
 
 class KCO4PApp extends StatelessWidget {
   const KCO4PApp({super.key});
@@ -47,27 +46,37 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _configImportee = false;
   List<String> _logs = [];
   String? dateExpiration;
-  DateTime? _dateExpirationReelle; // Date avec année à jour
+  DateTime? _dateExpirationReelle;
 
-  // 🔒 Chiffrement XOR simple
-  String _xorEncrypt(String text, String key) {
-    List<int> textBytes = utf8.encode(text);
-    List<int> keyBytes = utf8.encode(key);
-    List<int> result = [];
-    for (int i = 0; i < textBytes.length; i++) {
-      result.add(textBytes[i] ^ keyBytes[i % keyBytes.length]);
-    }
-    return base64.encode(result);
+  @override
+  void initState() {
+    super.initState();
+    _chargerLock(); // 🔒 Vérifie le lock au démarrage
   }
 
-  String _xorDecrypt(String encrypted, String key) {
-    List<int> encryptedBytes = base64.decode(encrypted);
-    List<int> keyBytes = utf8.encode(key);
-    List<int> result = [];
-    for (int i = 0; i < encryptedBytes.length; i++) {
-      result.add(encryptedBytes[i] ^ keyBytes[i % keyBytes.length]);
+  // 🔒 SAUVEGARDE LE LOCK À VIE - IRRÉVERSIBLE
+  Future<void> _sauvegarderLock() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('config_lockee_a_vie', true);
+    await prefs.setString('date_exp', dateExpiration?? '');
+  }
+
+  // 🔒 CHARGE LE LOCK AU DÉMARRAGE - SI LOCKÉ = MORT
+  Future<void> _chargerLock() async {
+    final prefs = await SharedPreferences.getInstance();
+    bool lock = prefs.getBool('config_lockee_a_vie')?? false;
+    if (lock) {
+      setState(() {
+        _configImportee = true;
+        globalConfigLockee = true;
+        dateExpiration = prefs.getString('date_exp');
+        _hostController.text = "***CONFIG VERROUILLÉE À VIE***";
+        _vlessController.text = "***LIEN MASQUÉ À VIE***";
+        _dateController.text = dateExpiration?? '';
+        _updateExpirationDate();
+      });
+      _addLog("🔒 CONFIGURATION VERROUILLÉE À VIE ACTIVE");
     }
-    return utf8.decode(result);
   }
 
   // 🔥 CALENDRIER AUTO : Met à jour l'année + expire à 23h59
@@ -115,32 +124,35 @@ class _HomeScreenState extends State<HomeScreen> {
         Map<String, dynamic> config = json.decode(decoded);
 
         setState(() {
-          _hostController.text = "***Config sécurisée***";
-          _vlessController.text = "***Lien masqué***";
+          _hostController.text = "***CONFIG VERROUILLÉE À VIE***";
+          _vlessController.text = "***LIEN MASQUÉ À VIE***";
           _dateController.text = config['dateExpiration']?? '';
           dateExpiration = config['dateExpiration'];
           _configImportee = true;
-          globalConfigLockee = true; // 🔒 LOCK GLOBAL
+          globalConfigLockee = true; // 🔒 LOCK GLOBAL À VIE
           _updateExpirationDate();
         });
 
-        _addLog("Configuration importée avec succès");
-        _addLog("Mode sécurisé activé - Champs verrouillés");
+        _sauvegarderLock(); // 🔒 SAUVEGARDE IRRÉVERSIBLE
+
+        _addLog("✅ Configuration importée");
+        _addLog("🔒 VERROUILLAGE À VIE ACTIVÉ - IRRÉVERSIBLE");
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Config importée - Mode sécurisé activé'),
-            backgroundColor: Colors.green,
+            content: Text('🔒 Config verrouillée à vie - Irréversible'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
           ),
         );
       } catch (e) {
-        _addLog("Erreur import: $e");
+        _addLog("❌ Erreur import: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Erreur: Lien invalide')),
         );
       }
     } else {
-      _addLog("Format invalide");
+      _addLog("❌ Format invalide");
     }
     _importController.clear();
   }
@@ -162,10 +174,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     if (_isConnected) {
-      _addLog("Connexion établie");
-      _addLog("Tunnel sécurisé actif");
+      _addLog("✅ Connexion établie");
+      _addLog("🔒 Tunnel sécurisé actif - Config toujours verrouillée");
     } else {
-      _addLog("Déconnexion");
+      _addLog("🔌 Déconnexion");
+      _addLog("🔒 Config reste verrouillée à vie");
     }
   }
 
@@ -182,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('KCO4P'),
         centerTitle: true,
+        backgroundColor: _configImportee? Colors.red.shade900 : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.article_outlined),
@@ -201,24 +215,37 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 🔒 Message si config lockée
+            // 🔒 Message LOCK À VIE
             if (_configImportee)
               Container(
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
+                  color: Colors.red.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green),
+                  border: Border.all(color: Colors.red, width: 2),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.lock, color: Colors.green),
+                    Icon(Icons.lock, color: Colors.red, size: 30),
                     SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        "Configuration sécurisée active",
-                        style: TextStyle(color: Colors.green),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "VERROUILLÉ À VIE",
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            "Configuration irréversible",
+                            style: TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -241,13 +268,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 10),
                     Text(
                       "Valide jusqu'au ${_getDateAffichage()}",
-                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
               ),
 
-            // Import
+            // Import - DÉSACTIVÉ SI LOCKÉ
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -261,19 +291,33 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _importController,
-                      decoration: const InputDecoration(
-                        hintText: "kco4p://...",
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.link),
+                      enabled:!_configImportee, // 🔒 Désactivé si locké
+                      decoration: InputDecoration(
+                        hintText: _configImportee
+                           ? "VERROUILLÉ À VIE"
+                            : "kco4p://...",
+                        border: const OutlineInputBorder(),
+                        prefixIcon: Icon(
+                          _configImportee? Icons.lock : Icons.link,
+                        ),
+                        filled: _configImportee,
+                        fillColor: _configImportee? Colors.red.withOpacity(0.1) : null,
                       ),
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: _importConfig,
-                        icon: const Icon(Icons.download),
-                        label: const Text("Importer"),
+                        onPressed: _configImportee? null : _importConfig,
+                        icon: Icon(_configImportee? Icons.lock : Icons.download),
+                        label: Text(
+                          _configImportee
+                             ? "VERROUILLÉ À VIE"
+                              : "Importer & Verrouiller",
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _configImportee? Colors.grey : Colors.red,
+                        ),
                       ),
                     ),
                   ],
@@ -283,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 20),
 
-            // Config - Disparaît si importée
+            // Config - DISPARAÎT SI LOCKÉ
             if (!_configImportee)...[
               Card(
                 child: Padding(
@@ -385,6 +429,7 @@ class LogsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Logs de connexion"),
         centerTitle: true,
+        backgroundColor: globalConfigLockee? Colors.red.shade900 : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -414,7 +459,7 @@ class LogsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 String displayLine = logs[index];
 
-                // 🔒 DOUBLE SÉCURITÉ : Re-masque si config lockée
+                // 🔒 DOUBLE SÉCURITÉ : Re-masque si config lockée À VIE
                 if (globalConfigLockee) {
                   displayLine = displayLine
                      .replaceAll(RegExp(r'yamo\.mtn\.cm', caseSensitive: false), '***')
@@ -435,6 +480,9 @@ class LogsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.grey.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
+                    border: globalConfigLockee
+                       ? Border.all(color: Colors.red.withOpacity(0.3))
+                        : null,
                   ),
                   child: Text(
                     displayLine,
