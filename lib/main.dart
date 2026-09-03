@@ -50,9 +50,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool estConnecte = false;
   bool enCours = false;
   String modeSelectionne = "VLESS / VMess";
-  bool isLocked = false; // Configuration verrouillée
+  bool isLocked = false;
 
-  // Données cachées quand verrouillé
   String? lockedHost;
   String? lockedConfig;
   String? lockedName;
@@ -85,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
               estConnecte = true;
               enCours = false;
 
-              // SnackBar Connected successfully
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text("Connected successfully"),
@@ -107,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
     initCore();
-    loadLockedConfig(); // Charger la config verrouillée au démarrage
+    loadLockedConfig();
   }
 
   Future<void> initCore() async {
@@ -121,7 +119,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==================== SAUVEGARDE / CHARGEMENT CONFIG VERROUILLÉE ====================
   Future<void> saveLockedConfig({
     required String name,
     required String mode,
@@ -147,8 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
         modeSelectionne = prefs.getString('lockedMode') ?? "VLESS / VMess";
         lockedHost = prefs.getString('lockedHost');
         lockedConfig = prefs.getString('lockedConfig');
-
-        // On ne montre pas le vrai contenu
         hostCtrl.text = "*******";
         configCtrl.text = "******** Configuration verrouillée ********";
       });
@@ -156,26 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> clearLockedConfig() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('isLocked');
-    await prefs.remove('lockedName');
-    await prefs.remove('lockedMode');
-    await prefs.remove('lockedHost');
-    await prefs.remove('lockedConfig');
-
-    setState(() {
-      isLocked = false;
-      lockedHost = null;
-      lockedConfig = null;
-      lockedName = null;
-      hostCtrl.clear();
-      configCtrl.clear();
-    });
-  }
-
   void addLog(String msg) {
-    // Masquer le host dans les logs
     String safeMsg = msg;
     if (lockedHost != null && lockedHost!.isNotEmpty) {
       safeMsg = safeMsg.replaceAll(lockedHost!, "*******");
@@ -263,7 +239,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // Utiliser les données verrouillées si elles existent
     final raw = isLocked ? (lockedConfig ?? "") : configCtrl.text.trim();
     final host = isLocked ? (lockedHost ?? "") : hostCtrl.text.trim();
 
@@ -324,7 +299,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ==================== IMPORT PAR LIEN ====================
   Future<void> importConfig() async {
     final TextEditingController linkCtrl = TextEditingController();
 
@@ -405,7 +379,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final locked = map["locked"] == true || wasLocked;
 
       if (locked) {
-        // Sauvegarde permanente
         await saveLockedConfig(
           name: name,
           mode: mode,
@@ -626,13 +599,31 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: importConfig,
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: const Text("Import"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0EA5E9),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: isLocked
                           ? null
                           : () {
-                              Navigator.push(
+                              Navigator.push(const
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => ExportPage(
