@@ -623,7 +623,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: isLocked
                           ? null
                           : () {
-                              Navigator.push(const
+                              Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => ExportPage(
@@ -657,6 +657,255 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ==================== PAGE EXPORT ====================
+class ExportPage extends StatefulWidget {
+  final String mode;
+  final String host;
+  final String config;
+
+  const ExportPage({
+    super.key,
+    required this.mode,
+    required this.host,
+    required this.config,
+  });
+
+  @override
+  State<ExportPage> createState() => _ExportPageState();
+}
+
+class _ExportPageState extends State<ExportPage> {
+  final nameCtrl = TextEditingController();
+  bool lockConfig = true;
+  bool hasExpire = false;
+  DateTime? expireDate;
+  String? generatedLink;
+
+  void generateLink() {
+    if (nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Mets un nom à la configuration")),
+      );
+      return;
+    }
+
+    final data = {
+      "app": "KČØ4P VPN",
+      "name": nameCtrl.text.trim(),
+      "mode": widget.mode,
+      "host": widget.host,
+      "config": widget.config,
+      "locked": lockConfig,
+      "expire_date": hasExpire && expireDate != null
+          ? expireDate!.toIso8601String()
+          : null,
+      "created_at": DateTime.now().toIso8601String(),
+    };
+
+    String content = jsonEncode(data);
+
+    if (lockConfig) {
+      content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
+    }
+
+    final link = "kco4p://config/${base64.encode(utf8.encode(content))}";
+
+    setState(() {
+      generatedLink = link;
+    });
+
+    Clipboard.setData(ClipboardData(text: link));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Lien copié dans le presse-papiers !"),
+        backgroundColor: Color(0xFF22C55E),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+        title: const Text("Exporter en Lien", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Nom de la configuration",
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(
+                hintText: "Ex: Serveur MTN Cameroun",
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: SwitchListTile(
+                title: const Text("Lock config"),
+                subtitle: const Text("Configuration verrouillée (recommandé)"),
+                value: lockConfig,
+                activeColor: const Color(0xFF0EA5E9),
+                onChanged: (v) => setState(() => lockConfig = v),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text("Date d'expiration"),
+                    value: hasExpire,
+                    activeColor: const Color(0xFF0EA5E9),
+                    onChanged: (v) => setState(() => hasExpire = v),
+                  ),
+                  if (hasExpire)
+                    ListTile(
+                      title: Text(
+                        expireDate == null
+                            ? "Choisir une date"
+                            : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
+                      ),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now().add(const Duration(days: 30)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2035),
+                        );
+                        if (picked != null) {
+                          setState(() => expireDate = picked);
+                        }
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: generateLink,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF22C55E),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Générer le lien",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            if (generatedLink != null) ...[
+              const SizedBox(height: 20),
+              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(
+                  generatedLink!,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== PAGE LOGS ====================
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+  const LogsScreen({super.key, required this.logs});
+
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use") || log.contains("Import")) {
+      return const Color(0xFF22C55E);
+    }
+    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) {
+      return const Color(0xFFEF4444);
+    }
+    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
+      return const Color(0xFFF59E0B);
+    }
+    return Colors.black87;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+        title: const Text("Logs", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: logs.isEmpty
+          ? const Center(child: Text("Aucun log pour le moment"))
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: logs.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final log = logs[i];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    log,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: _getLogColor(log),
+                      fontWeight: log.contains("ready to use")
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
