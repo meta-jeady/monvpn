@@ -15,7 +15,10 @@ dependencies:
   path_provider: ^2.1.4
   share_plus: ^10.0.2
   shared_preferences: ^2.2.3
-  dartssh2: ^2.13.0
+  dartssh2: 2.10.0
+
+dependency_overrides:
+  meta: ^1.16.0
 
 dev_dependencies:
   flutter_test:
