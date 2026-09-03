@@ -630,7 +630,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 enabled:!isLocked,
                 obscureText: isLocked,
                 decoration: InputDecoration(
-                  hintText: "Exemple: yamo.mtn.cm",
+                  hintText: "Exemple: google.com",
                   filled: true,
                   fillColor: isLocked? Colors.grey.shade200 : Colors.white,
                   border: OutlineInputBorder(
@@ -732,7 +732,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const Spacer(),
               const Text(
-                "DEV : kcørp tech serf",
+                "DEV : kcørp tech serf numéro +237687960259/680370344",
                 style: TextStyle(color: Colors.black38, fontSize: 12),
               ),
             ],
