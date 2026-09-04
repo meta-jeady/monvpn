@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,16 +47,26 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late FlutterV2ray v2ray;
+  Timer? _speedTimer;
 
   String statut = "DÉCONNECTÉ";
   bool estConnecte = false;
   bool enCours = false;
   String modeSelectionne = "VLESS / VMess";
   bool isLocked = false;
+  bool showGraph = false;
 
   String? lockedHost;
   String? lockedConfig;
   String? lockedName;
+
+  // Données pour le graphe
+  final List<FlSpot> downloadSpots = [];
+  final List<FlSpot> uploadSpots = [];
+  double currentDownload = 0;
+  double currentUpload = 0;
+  int timeIndex = 0;
+  final int maxPoints = 60; // 60 secondes d'historique
 
   final List<String> modes = [
     "VLESS / VMess",
@@ -83,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
               statut = "FREE SERF";
               estConnecte = true;
               enCours = false;
+              startSpeedMonitoring();
 
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -100,12 +113,57 @@ class _HomeScreenState extends State<HomeScreen> {
             statut = "DÉCONNECTÉ";
             estConnecte = false;
             enCours = false;
+            stopSpeedMonitoring();
           }
         });
       },
     );
     initCore();
     loadLockedConfig();
+  }
+
+  void startSpeedMonitoring() {
+    stopSpeedMonitoring();
+    timeIndex = 0;
+    downloadSpots.clear();
+    uploadSpots.clear();
+
+    _speedTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!estConnecte) return;
+
+      try {
+        final status = await v2ray.getV2rayStatus();
+        if (!mounted) return;
+
+        setState(() {
+          // flutter_v2ray retourne les vitesses en bytes/s
+          currentDownload = (status.downloadSpeed?? 0) / 1024; // KB/s
+          currentUpload = (status.uploadSpeed?? 0) / 1024; // KB/s
+
+          downloadSpots.add(FlSpot(timeIndex.toDouble(), currentDownload));
+          uploadSpots.add(FlSpot(timeIndex.toDouble(), currentUpload));
+
+          // Garde seulement les 60 derniers points
+          if (downloadSpots.length > maxPoints) {
+            downloadSpots.removeAt(0);
+            uploadSpots.removeAt(0);
+          }
+
+          timeIndex++;
+        });
+      } catch (e) {
+        // Ignore les erreurs de lecture
+      }
+    });
+  }
+
+  void stopSpeedMonitoring() {
+    _speedTimer?.cancel();
+    _speedTimer = null;
+    setState(() {
+      currentDownload = 0;
+      currentUpload = 0;
+    });
   }
 
   Future<void> initCore() async {
@@ -496,497 +554,352 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Color(0xFFEF4444);
   }
 
+  String formatSpeed(double kbps) {
+    if (kbps < 1024) return "${kbps.toStringAsFixed(1)} KB/s";
+    return "${(kbps / 1024).toStringAsFixed(2)} MB/s";
+  }
+
   @override
   void dispose() {
+    stopSpeedMonitoring();
     hostCtrl.dispose();
     configCtrl.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
-      appBar: AppBar(
-        title: const Text(
-          "KČØ4P VPN",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF0EA5E9),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.article_outlined, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => LogsScreen(logs: logs)),
-              );
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Text(
-                "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.black54, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButton<String>(
-                  value: modeSelectionne,
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  items: modes
-                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                     .toList(),
-                  onChanged: isLocked
-                     ? null
-                      : (value) {
-                          if (value!= null) {
-                            setState(() => modeSelectionne = value);
-                            addLog("Mode changé → $value");
-                          }
-                        },
-                ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      statut,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: estConnecte? const Color(0xFF22C55E) : couleur,
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (isLocked)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text(
-                          "🔒 Configuration verrouillée",
-                          style: TextStyle(color: Colors.orange, fontSize: 12),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              GestureDetector(
-                onTap: enCours? null : toggle,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(color: couleur, width: 4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: couleur.withOpacity(0.3),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      )
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.power_settings_new_rounded,
-                    size: 65,
-                    color: couleur,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "HOST (domaine de ton pays)",
-                  style: TextStyle(color: Colors.black54, fontSize: 12),
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: hostCtrl,
-                enabled:!isLocked,
-                obscureText: isLocked,
-                decoration: InputDecoration(
-                  hintText: "Exemple: yamo.mtn.cm",
-                  filled: true,
-                  fillColor: isLocked? Colors.grey.shade200 : Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "CONFIGURATION",
-                  style: TextStyle(color: Colors.black54, fontSize: 12),
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: configCtrl,
-                enabled: !isLocked,
-                maxLines: 3,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                decoration: InputDecoration(
-                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-                  filled: true,
-                  fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: importConfig,
-                      icon: const Icon(Icons.download_rounded, size: 18),
-                      label: const Text("Import"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0EA5E9),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: isLocked ? cleanConfig : null,
-                      icon: const Icon(Icons.delete_forever_rounded, size: 18),
-                      label: const Text("Clean"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF4444),
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade300,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: isLocked
-                          ? null
-                          : () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ExportPage(
-                                    mode: modeSelectionne,
-                                    host: hostCtrl.text,
-                                    config: configCtrl.text,
-                                  ),
-                                ),
-                              );
-                            },
-                      icon: const Icon(Icons.link, size: 18),
-                      label: const Text("Export"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF22C55E),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              const Text(
-                "DEV : kcørp tech serf",
-                style: TextStyle(color: Colors.black38, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ==================== PAGE EXPORT ====================
-class ExportPage extends StatefulWidget {
-  final String mode;
-  final String host;
-  final String config;
-
-  const ExportPage({
-    super.key,
-    required this.mode,
-    required this.host,
-    required this.config,
-  });
-
-  @override
-  State<ExportPage> createState() => _ExportPageState();
-}
-
-class _ExportPageState extends State<ExportPage> {
-  final nameCtrl = TextEditingController();
-  bool lockConfig = true;
-  bool hasExpire = false;
-  DateTime? expireDate;
-  String? generatedLink;
-
-  void generateLink() {
-    if (nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Mets un nom à la configuration")),
-      );
-      return;
-    }
-
-    final data = {
-      "app": "KČØ4P VPN",
-      "name": nameCtrl.text.trim(),
-      "mode": widget.mode,
-      "host": widget.host,
-      "config": widget.config,
-      "locked": lockConfig,
-      "expire_date": hasExpire && expireDate != null
-          ? expireDate!.toIso8601String()
-          : null,
-      "created_at": DateTime.now().toIso8601String(),
-    };
-
-    String content = jsonEncode(data);
-
-    if (lockConfig) {
-      content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
-    }
-
-    final link = "kco4p://config/${base64.encode(utf8.encode(content))}";
-
-    setState(() {
-      generatedLink = link;
-    });
-
-    Clipboard.setData(ClipboardData(text: link));
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Lien copié dans le presse-papiers !"),
-        backgroundColor: Color(0xFF22C55E),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
-      appBar: AppBar(
-        title: const Text("Exporter en Lien", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0EA5E9),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Nom de la configuration",
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: nameCtrl,
-              decoration: InputDecoration(
-                hintText: "Ex: Serveur MTN Cameroun",
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: SwitchListTile(
-                title: const Text("Lock config"),
-                subtitle: const Text("Configuration verrouillée (recommandé)"),
-                value: lockConfig,
-                activeColor: const Color(0xFF0EA5E9),
-                onChanged: (v) => setState(() => lockConfig = v),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
+  Widget _buildSpeedGraph() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: showGraph? 180 : 0,
+      child: showGraph
+         ? Container(
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 children: [
-                  SwitchListTile(
-                    title: const Text("Date d'expiration"),
-                    value: hasExpire,
-                    activeColor: const Color(0xFF0EA5E9),
-                    onChanged: (v) => setState(() => hasExpire = v),
-                  ),
-                  if (hasExpire)
-                    ListTile(
-                      title: Text(
-                        expireDate == null
-                            ? "Choisir une date"
-                            : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}",
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.download, color: Colors.blue, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            formatSpeed(currentDownload),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
-                      trailing: const Icon(Icons.calendar_today),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now().add(const Duration(days: 30)),
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime(2035),
-                        );
-                        if (picked != null) {
-                          setState(() => expireDate = picked);
-                        }
-                      },
+                      Row(
+                        children: [
+                          Icon(Icons.upload, color: Colors.orange, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            formatSpeed(currentUpload),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: LineChart(
+                      LineChartData(
+                        gridData: FlGridData(show: true, drawVerticalLine: false),
+                        titlesData: FlTitlesData(show: false),
+                        borderData: FlBorderData(show: false),
+                        minX: downloadSpots.isEmpty? 0 : downloadSpots.first.x,
+                        maxX: downloadSpots.isEmpty? 60 : downloadSpots.last.x,
+                        minY: 0,
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: downloadSpots,
+                            isCurved: true,
+                            color: Colors.blue,
+                            barWidth: 2,
+                            dotData: FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: Colors.blue.withOpacity(0.1),
+                            ),
+                          ),
+                          LineChartBarData(
+                            spots: uploadSpots,
+                            isCurved: true,
+                            color: Colors.orange,
+                            barWidth: 2,
+                            dotData: FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: Colors.orange.withOpacity(0.1),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: generateLink,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF22C55E),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  "Générer le lien",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            if (generatedLink != null) ...[
-              const SizedBox(height: 20),
-              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: SelectableText(
-                  generatedLink!,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+            )
+          : const SizedBox(),
     );
-  }
-}
-
-// ==================== PAGE LOGS ====================
-class LogsScreen extends StatelessWidget {
-  final List<String> logs;
-  const LogsScreen({super.key, required this.logs});
-
-  Color _getLogColor(String log) {
-    if (log.contains("ready to use") || log.contains("Import")) {
-      return const Color(0xFF22C55E);
-    }
-    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) {
-      return const Color(0xFFEF4444);
-    }
-    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
-      return const Color(0xFFF59E0B);
-    }
-    return Colors.black87;
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
-      appBar: AppBar(
-        title: const Text("Logs", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0EA5E9),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFFE0F2FE),
+    appBar: AppBar(
+      title: const Text(
+        "KČØ4P VPN",
+        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
       ),
-      body: logs.isEmpty
-          ? const Center(child: Text("Aucun log pour le moment"))
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: logs.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final log = logs[i];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    log,
+      centerTitle: true,
+      backgroundColor: const Color(0xFF0EA5E9),
+      elevation: 0,
+      actions: [
+        IconButton(
+          icon: Icon(
+            showGraph ? Icons.show_chart : Icons.bar_chart,
+            color: Colors.white,
+          ),
+          onPressed: () => setState(() => showGraph = !showGraph),
+          tooltip: "Graphe de connexion",
+        ),
+        IconButton(
+          icon: const Icon(Icons.article_outlined, color: Colors.white),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => LogsScreen(logs: logs)),
+            );
+          },
+        ),
+      ],
+    ),
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              "Sélectionne le mode de configuration",
+              style: TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: DropdownButton<String>(
+                value: modeSelectionne,
+                isExpanded: true,
+                underline: const SizedBox(),
+                items: modes
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: isLocked
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          setState(() => modeSelectionne = value);
+                          addLog("Mode changé → $value");
+                        }
+                      },
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    statut,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      color: _getLogColor(log),
-                      fontWeight: log.contains("ready to use")
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+                      color: estConnecte ? const Color(0xFF22C55E) : couleur,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                );
-              },
+                  if (isLocked)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        "🔒 Configuration verrouillée",
+                        style: TextStyle(color: Colors.orange, fontSize: 12),
+                      ),
+                    ),
+                  if (estConnecte && showGraph) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      "↓ ${formatSpeed(currentDownload)} ↑ ${formatSpeed(currentUpload)}",
+                      style: const TextStyle(fontSize: 13, color: Colors.black54),
+                    ),
+                  ],
+                ],
+              ),
             ),
-    );
-  }
+            const SizedBox(height: 12),
+            _buildSpeedGraph(),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: enCours ? null : toggle,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  border: Border.all(color: couleur, width: 4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: couleur.withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    )
+                  ],
+                ),
+                child: Icon(
+                  Icons.power_settings_new_rounded,
+                  size: 65,
+                  color: couleur,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "HOST (domaine de ton pays)",
+                style: TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: hostCtrl,
+              enabled: !isLocked,
+              obscureText: isLocked,
+              decoration: InputDecoration(
+                hintText: "Exemple: yamo.mtn.cm",
+                filled: true,
+                fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "CONFIGURATION",
+                style: TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: configCtrl,
+              enabled: !isLocked,
+              maxLines: 3,
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
+                filled: true,
+                fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: importConfig,
+                    icon: const Icon(Icons.download_rounded, size: 18),
+                    label: const Text("Import"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0EA5E9),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isLocked ? cleanConfig : null,
+                    icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                    label: const Text("Clean"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF4444),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isLocked
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ExportPage(
+                                  mode: modeSelectionne,
+                                  host: hostCtrl.text,
+                                  config: configCtrl.text,
+                                ),
+                              ),
+                            );
+                          },
+                    icon: const Icon(Icons.link, size: 18),
+                    label: const Text("Export"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF22C55E),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            const Text(
+              "DEV : kcørp tech serf",
+              style: TextStyle(color: Colors.black38, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
