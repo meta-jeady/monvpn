@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
@@ -70,17 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
-  // GRAPHE + CONSO
-  Timer? speedTimer;
-  List<double> uploadSpots = [];
-  List<double> downloadSpots = [];
-  double totalUploadMB = 0.0;
-  double totalDownloadMB = 0.0;
-  double sessionUploadMB = 0.0;
-  double sessionDownloadMB = 0.0;
-  double lastUploadTotal = 0;
-  double lastDownloadTotal = 0;
-
   @override
   void initState() {
     super.initState();
@@ -96,7 +83,6 @@ class _HomeScreenState extends State<HomeScreen> {
               statut = "FREE SERF";
               estConnecte = true;
               enCours = false;
-              startSpeedMonitor();
 
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -114,7 +100,6 @@ class _HomeScreenState extends State<HomeScreen> {
             statut = "DÉCONNECTÉ";
             estConnecte = false;
             enCours = false;
-            stopSpeedMonitor();
           }
         });
       },
@@ -132,65 +117,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       addLog("Erreur core: $e");
     }
-  }
-
-  void startSpeedMonitor() {
-    uploadSpots.clear();
-    downloadSpots.clear();
-    lastUploadTotal = 0;
-    lastDownloadTotal = 0;
-    sessionUploadMB = 0;
-    sessionDownloadMB = 0;
-
-    speedTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (!estConnecte) return;
-
-      try {
-        final currentUp = await v2ray.getV2rayTrafficUplink();
-        final currentDown = await v2ray.getV2rayTrafficDownlink();
-
-        double upSpeed = (currentUp - lastUploadTotal) / 1024; // KB/s
-        double downSpeed = (currentDown - lastDownloadTotal) / 1024; // KB/s
-
-        if (upSpeed < 0) upSpeed = 0;
-        if (downSpeed < 0) downSpeed = 0;
-
-        totalUploadMB = currentUp / 1024 / 1024;
-        totalDownloadMB = currentDown / 1024 / 1024;
-
-        if (lastUploadTotal > 0) {
-          sessionUploadMB += (currentUp - lastUploadTotal) / 1024;
-          sessionDownloadMB += (currentDown - lastDownloadTotal) / 1024 / 1024;
-        }
-
-        lastUploadTotal = currentUp.toDouble();
-        lastDownloadTotal = currentDown.toDouble();
-
-        setState(() {
-          uploadSpots.add(upSpeed);
-          downloadSpots.add(downSpeed);
-
-          if (uploadSpots.length > 30) {
-            uploadSpots.removeAt(0);
-            downloadSpots.removeAt(0);
-          }
-        });
-      } catch (e) {
-        addLog("Erreur stats: $e");
-      }
-    });
-  }
-
-  void stopSpeedMonitor() {
-    speedTimer?.cancel();
-    speedTimer = null;
-  }
-
-  String formatData(double mb) {
-    if (mb >= 1024) {
-      return "${(mb / 1024).toStringAsFixed(2)} GB";
-    }
-    return "${mb.toStringAsFixed(1)} MB";
   }
 
   Future<void> saveLockedConfig({
@@ -309,7 +235,6 @@ class _HomeScreenState extends State<HomeScreen> {
         enCours = false;
         statut = "DÉCONNECTÉ";
       });
-      stopSpeedMonitor();
       addLog("Déconnecté");
       return;
     }
@@ -571,80 +496,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Color(0xFFEF4444);
   }
 
-  Widget buildSpeedGraph() {
-    if (!estConnecte) return const SizedBox.shrink();
-
-    return Container(
-      height: 210,
-      margin: const EdgeInsets.only(top: 12, bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.speed, size: 16, color: Colors.black54),
-              const SizedBox(width: 6),
-              const Text("Vitesse réseau",
-                  style: TextStyle(fontSize: 12, color: Colors.black54)),
-              const Spacer(),
-              Container(width: 10, height: 10, color: const Color(0xFF0EA5E9)),
-              const SizedBox(width: 4),
-              const Text("Down", style: TextStyle(fontSize: 10)),
-              const SizedBox(width: 8),
-              Container(width: 10, height: 10, color: const Color(0xFF22C55E)),
-              const SizedBox(width: 4),
-              const Text("Up", style: TextStyle(fontSize: 10)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: CustomPaint(
-              painter: _GraphPainter(downloadSpots, uploadSpots),
-              child: Container(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Column(
-                children: [
-                  const Text("Session",
-                      style: TextStyle(fontSize: 10, color: Colors.black54)),
-                  Text(
-                    "↓ ${formatData(sessionDownloadMB)} ↑ ${formatData(sessionUploadMB)}",
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              Container(width: 1, height: 25, color: Colors.grey.shade300),
-              Column(
-                children: [
-                  const Text("Total",
-                      style: TextStyle(fontSize: 10, color: Colors.black54)),
-                  Text(
-                    "↓ ${formatData(totalDownloadMB)} ↑ ${formatData(totalUploadMB)}",
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
-    stopSpeedMonitor();
     hostCtrl.dispose();
     configCtrl.dispose();
     super.dispose();
@@ -655,18 +508,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFE0F2FE),
       appBar: AppBar(
-        title: Column(
-          children: [
-            const Text(
-              "KČØ4P VPN",
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            if (estConnecte)
-              Text(
-                "Total: ${formatData(totalDownloadMB + totalUploadMB)}",
-                style: const TextStyle(fontSize: 11, color: Colors.white70),
-              ),
-          ],
+        title: const Text(
+          "KČØ4P VPN",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
         backgroundColor: const Color(0xFF0EA5E9),
@@ -693,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(color: Colors.black54, fontSize: 13),
               ),
               const SizedBox(height: 8),
-                            Container(
+              Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -746,8 +590,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              buildSpeedGraph(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 20),
               GestureDetector(
                 onTap: enCours? null : toggle,
                 child: AnimatedContainer(
@@ -807,13 +650,13 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               TextField(
                 controller: configCtrl,
-                enabled:!isLocked,
+                enabled: !isLocked,
                 maxLines: 3,
                 style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
                   filled: true,
-                  fillColor: isLocked? Colors.grey.shade200 : Colors.white,
+                  fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -841,7 +684,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: isLocked? cleanConfig : null,
+                      onPressed: isLocked ? cleanConfig : null,
                       icon: const Icon(Icons.delete_forever_rounded, size: 18),
                       label: const Text("Clean"),
                       style: ElevatedButton.styleFrom(
@@ -859,7 +702,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: isLocked
-                         ? null
+                          ? null
                           : () {
                               Navigator.push(
                                 context,
@@ -899,7 +742,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ==================== EXPORT PAGE ====================
+// ==================== PAGE EXPORT ====================
 class ExportPage extends StatefulWidget {
   final String mode;
   final String host;
@@ -938,8 +781,8 @@ class _ExportPageState extends State<ExportPage> {
       "host": widget.host,
       "config": widget.config,
       "locked": lockConfig,
-      "expire_date": hasExpire && expireDate!= null
-         ? expireDate!.toIso8601String()
+      "expire_date": hasExpire && expireDate != null
+          ? expireDate!.toIso8601String()
           : null,
       "created_at": DateTime.now().toIso8601String(),
     };
@@ -960,7 +803,7 @@ class _ExportPageState extends State<ExportPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("Lien copié dans le presse-papiers!"),
+        content: Text("Lien copié dans le presse-papiers !"),
         backgroundColor: Color(0xFF22C55E),
       ),
     );
@@ -1030,7 +873,7 @@ class _ExportPageState extends State<ExportPage> {
                     ListTile(
                       title: Text(
                         expireDate == null
-                           ? "Choisir une date"
+                            ? "Choisir une date"
                             : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}",
                       ),
                       trailing: const Icon(Icons.calendar_today),
@@ -1041,7 +884,7 @@ class _ExportPageState extends State<ExportPage> {
                           firstDate: DateTime.now(),
                           lastDate: DateTime(2035),
                         );
-                        if (picked!= null) {
+                        if (picked != null) {
                           setState(() => expireDate = picked);
                         }
                       },
@@ -1068,7 +911,7 @@ class _ExportPageState extends State<ExportPage> {
                 ),
               ),
             ),
-            if (generatedLink!= null)...[
+            if (generatedLink != null) ...[
               const SizedBox(height: 20),
               const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
@@ -1092,7 +935,7 @@ class _ExportPageState extends State<ExportPage> {
   }
 }
 
-// ==================== LOGS PAGE ====================
+// ==================== PAGE LOGS ====================
 class LogsScreen extends StatelessWidget {
   final List<String> logs;
   const LogsScreen({super.key, required this.logs});
@@ -1121,7 +964,7 @@ class LogsScreen extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: logs.isEmpty
-         ? const Center(child: Text("Aucun log pour le moment"))
+          ? const Center(child: Text("Aucun log pour le moment"))
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: logs.length,
@@ -1137,7 +980,7 @@ class LogsScreen extends StatelessWidget {
                       fontFamily: 'monospace',
                       color: _getLogColor(log),
                       fontWeight: log.contains("ready to use")
-                         ? FontWeight.bold
+                          ? FontWeight.bold
                           : FontWeight.normal,
                     ),
                   ),
@@ -1146,76 +989,4 @@ class LogsScreen extends StatelessWidget {
             ),
     );
   }
-}
-
-// ==================== CUSTOM PAINTER POUR LE GRAPHE ====================
-class _GraphPainter extends CustomPainter {
-  final List<double> downloadSpots;
-  final List<double> uploadSpots;
-
-  _GraphPainter(this.downloadSpots, this.uploadSpots);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (downloadSpots.isEmpty || uploadSpots.isEmpty) return;
-
-    final paintDown = Paint()
-     ..color = const Color(0xFF0EA5E9)
-     ..strokeWidth = 2
-     ..style = PaintingStyle.stroke
-     ..strokeCap = StrokeCap.round;
-
-    final paintUp = Paint()
-     ..color = const Color(0xFF22C55E)
-     ..strokeWidth = 2
-     ..style = PaintingStyle.stroke
-     ..strokeCap = StrokeCap.round;
-
-    final fillDown = Paint()
-     ..color = const Color(0xFF0EA5E9).withOpacity(0.1)
-     ..style = PaintingStyle.fill;
-
-    double maxY = 1;
-    for (var s in downloadSpots) {
-      if (s > maxY) maxY = s;
-    }
-    for (var s in uploadSpots) {
-      if (s > maxY) maxY = s;
-    }
-    maxY = maxY * 1.2;
-    if (maxY < 10) maxY = 10;
-
-    Path pathDown = Path();
-    Path pathUp = Path();
-    Path fillPath = Path();
-
-    for (int i = 0; i < downloadSpots.length; i++) {
-      double x = downloadSpots.length > 1
-         ? (i / (downloadSpots.length - 1)) * size.width
-          : size.width / 2;
-
-      double yDown = size.height - (downloadSpots[i] / maxY) * size.height;
-      double yUp = size.height - (uploadSpots[i] / maxY) * size.height;
-
-      if (i == 0) {
-        pathDown.moveTo(x, yDown);
-        pathUp.moveTo(x, yUp);
-        fillPath.moveTo(x, size.height);
-        fillPath.lineTo(x, yDown);
-      } else {
-        pathDown.lineTo(x, yDown);
-        pathUp.lineTo(x, yUp);
-        fillPath.lineTo(x, yDown);
-      }
-    }
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
-
-    canvas.drawPath(fillPath, fillDown);
-    canvas.drawPath(pathDown, paintDown);
-    canvas.drawPath(pathUp, paintUp);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GraphPainter oldDelegate) => true;
 }
