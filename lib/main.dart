@@ -59,7 +59,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String? lockedConfig;
   String? lockedName;
 
-  // Graphique
   final List<FlSpot> downloadSpots = [];
   final List<FlSpot> uploadSpots = [];
   double currentDownload = 0;
@@ -479,10 +478,49 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> exportConfig() async {
+    final name = isLocked ? (lockedName ?? "Config") : "Ma config";
+    final host = isLocked ? (lockedHost ?? "") : hostCtrl.text.trim();
+    final config = isLocked ? (lockedConfig ?? "") : configCtrl.text.trim();
+    final mode = modeSelectionne;
+
+    if (config.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Aucune configuration à exporter")),
+      );
+      return;
+    }
+
+    final map = {
+      "app": "KČØ4P VPN",
+      "name": name,
+      "mode": mode,
+      "host": host,
+      "config": config,
+      "locked": isLocked,
+    };
+
+    final jsonStr = jsonEncode(map);
+    final encoded = base64.encode(utf8.encode(jsonStr));
+    final link = "kco4p://config/$encoded";
+
+    await Clipboard.setData(ClipboardData(text: link));
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Lien exporté (copié dans le presse-papiers)"),
+        backgroundColor: Color(0xFF22C55E),
+      ),
+    );
+    addLog("Config exportée");
+  }
+
   Future<void> cleanConfig() async {
     if (!isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Aucune configuration verrouillée à effacer")),
+        const SnackBar(
+            content: Text("Aucune configuration verrouillée à effacer")),
       );
       return;
     }
@@ -580,7 +618,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: LineChart(
                       LineChartData(
-                        gridData: const FlGridData(show: true, drawVerticalLine: false),
+                        gridData:
+                            const FlGridData(show: true, drawVerticalLine: false),
                         titlesData: const FlTitlesData(show: false),
                         borderData: FlBorderData(show: false),
                         minX: downloadSpots.isEmpty ? 0 : downloadSpots.first.x,
@@ -819,6 +858,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
+                      onPressed: exportConfig,
+                      icon: const Icon(Icons.upload_rounded, size: 18),
+                      label: const Text("Export"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF22C55E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
                       onPressed: isLocked ? cleanConfig : null,
                       icon: const Icon(Icons.delete_forever_rounded, size: 18),
                       label: const Text("Clean"),
@@ -873,3 +928,4 @@ class LogsScreen extends StatelessWidget {
     );
   }
 }
+       
