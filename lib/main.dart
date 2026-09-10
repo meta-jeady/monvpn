@@ -268,8 +268,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-         !raw.startsWith("vmess://") &&
-         !raw.startsWith("trojan://")) {
+        !raw.startsWith("vmess://") &&
+        !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -503,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-             ? "Config verrouillée importée : $name"
+            ? "Config verrouillée importée : $name"
               : "Importé : $name"),
           backgroundColor: const Color(0xFF22C55E),
         ),
@@ -659,23 +659,24 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           LineChartBarData(
-  spots: uploadSpots,
-  isCurved: true,
-  color: Colors.orange,
-  barWidth: 2,
-  dotData: const FlDotData(show: false),
-  belowBarData: BarAreaData(
-    show: true,
-    color: Colors.orange.withOpacity(0.1),
+                            spots: uploadSpots,
+                            isCurved: true,
+                            color: Colors.orange,
+                            barWidth: 2,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                                       belowBarData: BarAreaData(
+            show: true,
+            color: Colors.orange.withOpacity(0.1),
+          ),
+        ),
+      ],
+    ),
   ),
 ),
-                      ],
-                    ),
-                  ),
-                ),
               ],
             ),
           )
         : const SizedBox.shrink(),
   );
-  }
+                  }
