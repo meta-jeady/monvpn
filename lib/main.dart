@@ -62,8 +62,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // Graphique
   final List<FlSpot> downloadSpots = [];
   final List<FlSpot> uploadSpots = [];
-  double currentDownload = 0; // KB/s
-  double currentUpload = 0;   // KB/s
+  double currentDownload = 0;
+  double currentUpload = 0;
   int timeIndex = 0;
   final int maxPoints = 60;
   Timer? _graphTimer;
@@ -80,7 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
-  // Dernier status reçu du core
   V2RayStatus? lastStatus;
 
   @override
@@ -138,7 +137,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!estConnecte || lastStatus == null) return;
 
       setState(() {
-        // Les vitesses viennent en bytes/s → on convertit en KB/s
         currentDownload = (lastStatus!.downloadSpeed) / 1024.0;
         currentUpload = (lastStatus!.uploadSpeed) / 1024.0;
 
@@ -841,6 +839,37 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+  const LogsScreen({super.key, required this.logs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Logs"),
+        backgroundColor: const Color(0xFF0EA5E9),
+        foregroundColor: Colors.white,
+      ),
+      body: logs.isEmpty
+          ? const Center(child: Text("Aucun log"))
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: logs.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    logs[logs.length - 1 - index],
+                    style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
