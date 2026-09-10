@@ -58,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? lockedHost;
   String? lockedConfig;
   String? lockedName;
-  DateTime? lockedExpireDate; // AJOUT POUR EXPIRATION
+  DateTime? lockedExpireDate;
 
   final List<FlSpot> downloadSpots = [];
   final List<FlSpot> uploadSpots = [];
@@ -174,13 +174,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ========== BLOC CORRIGÉ : SAUVEGARDE AVEC DATE ==========
   Future<void> saveLockedConfig({
     required String name,
     required String mode,
     required String host,
     required String config,
-    DateTime? expireDate, // AJOUT
+    DateTime? expireDate,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLocked', true);
@@ -195,7 +194,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ========== BLOC CORRIGÉ : CHARGEMENT AVEC VÉRIF EXPIRATION ==========
   Future<void> loadLockedConfig() async {
     final prefs = await SharedPreferences.getInstance();
     final locked = prefs.getBool('isLocked')?? false;
@@ -321,7 +319,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // VÉRIF EXPIRATION AJOUTÉE
     if (isLocked && lockedExpireDate!= null && DateTime.now().isAfter(lockedExpireDate!)) {
       addLog("Configuration expirée");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -391,7 +388,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ========== BLOC CORRIGÉ : IMPORT AVEC DATE ==========
   Future<void> importConfig() async {
     final TextEditingController linkCtrl = TextEditingController();
 
@@ -479,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mode: mode,
           host: host,
           config: config,
-          expireDate: expireDate, // CORRECTION CRUCIALE
+          expireDate: expireDate,
         );
 
         setState(() {
@@ -487,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
           lockedName = name;
           lockedHost = host;
           lockedConfig = config;
-          lockedExpireDate = expireDate; // CORRECTION CRUCIALE
+          lockedExpireDate = expireDate;
           modeSelectionne = mode;
           hostCtrl.text = "*******";
           configCtrl.text = "******** Configuration verrouillée ********";
@@ -523,8 +519,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> cleanConfig() async {
     if (!isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Aucune configuration verrouillée à effacer")),
+        const SnackBar(content: Text("Aucune configuration verrouillée à effacer")),
       );
       return;
     }
@@ -543,7 +538,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
             child: const Text("Effacer"),
           ),
         ],
@@ -558,26 +556,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+
     setState(() {
       isLocked = false;
-      lockedName = null;
       lockedHost = null;
       lockedConfig = null;
-      lockedExpireDate = null; // AJOUT
+      lockedName = null;
+      lockedExpireDate = null;
       hostCtrl.clear();
       configCtrl.clear();
       modeSelectionne = "VLESS / VMess";
       statut = "DÉCONNECTÉ";
       estConnecte = false;
       enCours = false;
+      logs.clear();
     });
-    addLog("Configuration verrouillée effacée");
+
+    addLog("App réinitialisée - configuration supprimée");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Configuration effacée. App vierge."),
+        backgroundColor: Color(0xFFEF4444),
+      ),
+    );
   }
 
   Color get couleur {
-    if (enCours) return const Color(0xFFF59E0B);
     if (estConnecte) return const Color(0xFF22C55E);
-    if (statut.contains("EXPIRÉE")) return const Color(0xFF6B7280);
+    if (enCours) return const Color(0xFFF59E0B);
+    if (statut.contains("INVALIDE") || statut.contains("ÉCHEC") || statut.contains("EXPIRÉE")) {
+      return const Color(0xFF6B7280);
+    }
     return const Color(0xFFEF4444);
   }
 
@@ -628,39 +637,45 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-Expanded(
-  child: LineChart(
-    LineChartData(
-      gridData: const FlGridData(show: true, drawVerticalLine: false),
-      titlesData: const FlTitlesData(show: false),
-      borderData: FlBorderData(show: false),
-      minX: downloadSpots.isEmpty ? 0 : downloadSpots.first.x,
-      maxX: downloadSpots.isEmpty ? 60 : downloadSpots.last.x,
-      minY: 0,
-      lineBarsData: [
-        LineChartBarData(
-          spots: downloadSpots,
-          isCurved: true,
-          color: Colors.blue,
-          barWidth: 2,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            color: Colors.blue.withOpacity(0.1),
-          ),
-        ),
-        LineChartBarData(
-          spots: uploadSpots,
-          isCurved: true,
-          color: Colors.orange,
-          barWidth: 2,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            color: Colors.orange.withOpacity(0.1),
-          ),
-        ),
-      ],
-    ),
+                  Expanded(
+                    child: LineChart(
+                      LineChartData(
+                        gridData: const FlGridData(show: true, drawVerticalLine: false),
+                        titlesData: const FlTitlesData(show: false),
+                        borderData: FlBorderData(show: false),
+                        minX: downloadSpots.isEmpty? 0 : downloadSpots.first.x,
+                        maxX: downloadSpots.isEmpty? 60 : downloadSpots.last.x,
+                        minY: 0,
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: downloadSpots,
+                            isCurved: true,
+                            color: Colors.blue,
+                            barWidth: 2,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: Colors.blue.withOpacity(0.1),
+                            ),
+                          ),
+                          LineChartBarData(
+  spots: uploadSpots,
+  isCurved: true,
+  color: Colors.orange,
+  barWidth: 2,
+  dotData: const FlDotData(show: false),
+  belowBarData: BarAreaData(
+    show: true,
+    color: Colors.orange.withOpacity(0.1),
   ),
 ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : const SizedBox.shrink(),
+  );
+  }
