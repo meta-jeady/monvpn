@@ -743,3 +743,28 @@ Container(
     ],
   ),
 ),
+} // <- accolade qui ferme class _HomeScreenState
+
+// COLLE ÇA ICI, EN DEHORS DE LA CLASSE
+class _StatItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  const _StatItem({required this.icon, required this.label, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color ?? Colors.white54),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: color ?? Colors.white70),
+        ),
+      ],
+    );
+  }
+}
