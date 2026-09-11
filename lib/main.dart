@@ -611,138 +611,138 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              // AJOUTÉ - Widget Graph
-if (estConnecte && uploadSpots.isNotEmpty)
-  Container(
-    height: 120,
-    padding: const EdgeInsets.all(12),
-    margin: const EdgeInsets.only(top: 20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
-        )
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              "Trafic réseau",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.black54,
-              ),
-            ),
-            Row(
-              children: [
+                            // AJOUTÉ - Widget Graph
+              if (estConnecte && uploadSpots.isNotEmpty)
                 Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF22C55E),
-                    shape: BoxShape.circle,
+                  height: 120,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(top: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
                   ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  "Down",
-                  style: TextStyle(fontSize: 10, color: Colors.black54),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0EA5E9),
-                    shape: BoxShape.circle,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Trafic réseau",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF22C55E),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                "Down",
+                                style: TextStyle(fontSize: 10, color: Colors.black54),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF0EA5E9),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                "Up",
+                                style: TextStyle(fontSize: 10, color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: LineChart(
+                          LineChartData(
+                            gridData: FlGridData(show: false),
+                            titlesData: FlTitlesData(
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                            ),
+                            borderData: FlBorderData(show: false),
+                            minX: uploadSpots.isNotEmpty ? uploadSpots.first.x : 0,
+                            maxX: uploadSpots.isNotEmpty ? uploadSpots.last.x : 30,
+                            minY: 0,
+                            lineBarsData: [
+                              LineChartBarData(
+                                spots: downloadSpots,
+                                isCurved: true,
+                                color: const Color(0xFF22C55E),
+                                barWidth: 2,
+                                isStrokeCapRound: true,
+                                dotData: FlDotData(show: false),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      const Color(0xFF22C55E).withOpacity(0.3),
+                                      const Color(0xFF22C55E).withOpacity(0.0),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                ),
+                              ),
+                              LineChartBarData(
+                                spots: uploadSpots,
+                                isCurved: true,
+                                color: const Color(0xFF0EA5E9),
+                                barWidth: 2,
+                                isStrokeCapRound: true,
+                                dotData: FlDotData(show: false),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      const Color(0xFF0EA5E9).withOpacity(0.3),
+                                      const Color(0xFF0EA5E9).withOpacity(0.0),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  "Up",
-                  style: TextStyle(fontSize: 10, color: Colors.black54),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(show: false),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                rightTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                topTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-              ),
-              borderData: FlBorderData(show: false),
-              minX: uploadSpots.isNotEmpty ? uploadSpots.first.x : 0,
-              maxX: uploadSpots.isNotEmpty ? uploadSpots.last.x : 30,
-              minY: 0,
-              lineBarsData: [
-                // Courbe Download - Vert
-                LineChartBarData(
-                  spots: downloadSpots,
-                  isCurved: true,
-                  color: const Color(0xFF22C55E),
-                  barWidth: 2,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(show: false),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF22C55E).withOpacity(0.3),
-                        const Color(0xFF22C55E).withOpacity(0.0),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-                // Courbe Upload - Bleu
-                LineChartBarData(
-                  spots: uploadSpots,
-                  isCurved: true,
-                  color: const Color(0xFF0EA5E9),
-                  barWidth: 2,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(show: false),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF0EA5E9).withOpacity(0.3),
-                        const Color(0xFF0EA5E9).withOpacity(0.0),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    ),
-  ),
+                ), // <- Cette virgule manquait
+              const SizedBox(height: 20),
+              
