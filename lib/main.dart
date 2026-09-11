@@ -23,14 +23,12 @@ class Kco4pVPNApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.dark, // SEUL AJOUT
-        // COULEURS ÉCHANGÉES ICI 👇
-        scaffoldBackgroundColor: const Color(0xFF0F172A), // Était 0xFFE0F2FE
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFE0F2FE),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
-          brightness: Brightness.dark, // AJOUT
-          primary: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
-          secondary: const Color(0xFF0E7490), // Était 0xFF22C55E
+          seedColor: const Color(0xFF0EA5E9),
+          primary: const Color(0xFF0EA5E9),
+          secondary: const Color(0xFF22C55E),
         ),
       ),
       home: const HomeScreen(),
@@ -89,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text("Connected successfully"),
-                  backgroundColor: Color(0xFF06B6D4), // Était 0xFF22C55E
+                  backgroundColor: Color(0xFF22C55E),
                   duration: Duration(seconds: 2),
                 ),
               );
@@ -191,8 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-        !raw.startsWith("vmess://") &&
-        !raw.startsWith("trojan://")) {
+         !raw.startsWith("vmess://") &&
+         !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -325,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context, linkCtrl.text.trim()),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
+                backgroundColor: const Color(0xFF0EA5E9),
                 foregroundColor: Colors.white,
               ),
               child: const Text("Importer"),
@@ -412,9 +410,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-            ? "Config verrouillée importée : $name"
+             ? "Config verrouillée importée : $name"
               : "Importé : $name"),
-          backgroundColor: const Color(0xFF0E7490), // Était 0xFF22C55E
+          backgroundColor: const Color(0xFF22C55E),
         ),
       );
     } catch (e) {
@@ -490,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF06B6D4); // Était 0xFF22C55E
+    if (estConnecte) return const Color(0xFF22C55E);
     if (enCours) return const Color(0xFFF59E0B);
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
@@ -508,14 +506,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Était 0xFFE0F2FE
+      backgroundColor: const Color(0xFFE0F2FE),
       appBar: AppBar(
         title: const Text(
           "KČØ4P VPN",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
+        backgroundColor: const Color(0xFF0EA5E9),
         elevation: 0,
         actions: [
           IconButton(
@@ -536,26 +534,24 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.grey, fontSize: 13), // Était black54
+                style: TextStyle(color: Colors.black54, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B), // Était Colors.white
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
                   underline: const SizedBox(),
-                  dropdownColor: const Color(0xFF1E293B), // AJOUT pour dark
-                  style: const TextStyle(color: Colors.white), // AJOUT
                   items: modes
-                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                    .toList(),
+                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                     .toList(),
                   onChanged: isLocked
-                    ? null
+                     ? null
                       : (value) {
                           if (value!= null) {
                             setState(() => modeSelectionne = value);
@@ -569,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B), // Était Colors.white
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -578,7 +574,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       statut,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: estConnecte? const Color(0xFF06B6D4) : couleur, // Était 0xFF22C55E
+                        color: estConnecte? const Color(0xFF22C55E) : couleur,
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
@@ -603,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF1E293B), // Était Colors.white
+                    color: Colors.white,
                     border: Border.all(color: couleur, width: 4),
                     boxShadow: [
                       BoxShadow(
@@ -625,7 +621,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   "HOST (domaine de ton pays)",
-                  style: TextStyle(color: Colors.grey, fontSize: 12), // Était black54
+                  style: TextStyle(color: Colors.black54, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 6),
@@ -633,12 +629,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 controller: hostCtrl,
                 enabled:!isLocked,
                 obscureText: isLocked,
-                style: const TextStyle(color: Colors.white), // AJOUT
                 decoration: InputDecoration(
                   hintText: "Exemple: yamo.mtn.cm",
-                  hintStyle: TextStyle(color: Colors.grey.shade600), // AJOUT
                   filled: true,
-                  fillColor: isLocked? const Color(0xFF334155) : const Color(0xFF1E293B), // Était grey.shade200 : Colors.white
+                  fillColor: isLocked? Colors.grey.shade200 : Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -646,98 +640,352 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-const Align(
-  alignment: Alignment.centerLeft,
-  child: Text(
-    "CONFIGURATION",
-    style: TextStyle(color: Colors.grey, fontSize: 12),
-  ),
-),
-const SizedBox(height: 6),
-TextField(
-  controller: configCtrl,
-  enabled: !isLocked,
-  maxLines: 3,
-  style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white),
-  decoration: InputDecoration(
-    hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
-    hintStyle: TextStyle(color: Colors.grey.shade600),
-    filled: true,
-    fillColor: isLocked ? const Color(0xFF334155) : const Color(0xFF1E293B),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide.none,
-    ),
-  ),
-),
-const SizedBox(height: 16),
-Row(
-  children: [
-    Expanded(
-      child: ElevatedButton.icon(
-        onPressed: importConfig,
-        icon: const Icon(Icons.download_rounded, size: 18),
-        label: const Text("Import"),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF06B6D4), // Cyan au lieu de 0xFF0EA5E9
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "CONFIGURATION",
+                  style: TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: configCtrl,
+                enabled: !isLocked,
+                maxLines: 3,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
+                  filled: true,
+                  fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: importConfig,
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: const Text("Import"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0EA5E9),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: isLocked ? cleanConfig : null,
+                      icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                      label: const Text("Clean"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEF4444),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade300,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: isLocked
+                          ? null
+                          : () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ExportPage(
+                                    mode: modeSelectionne,
+                                    host: hostCtrl.text,
+                                    config: configCtrl.text,
+                                  ),
+                                ),
+                              );
+                            },
+                      icon: const Icon(Icons.link, size: 18),
+                      label: const Text("Export"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF22C55E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              const Text(
+                "DEV : kcørp tech serf",
+                style: TextStyle(color: Colors.black38, fontSize: 12),
+              ),
+            ],
           ),
         ),
       ),
-    ),
-    const SizedBox(width: 8),
-    Expanded(
-      child: ElevatedButton.icon(
-        onPressed: isLocked ? cleanConfig : null,
-        icon: const Icon(Icons.delete_forever_rounded, size: 18),
-        label: const Text("Clean"),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFEF4444),
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFF334155), // Slate 700 au lieu de grey.shade300
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+    );
+  }
+}
+// ==================== PAGE EXPORT ====================
+class ExportPage extends StatefulWidget {
+  final String mode;
+  final String host;
+  final String config;
+
+  const ExportPage({
+    super.key,
+    required this.mode,
+    required this.host,
+    required this.config,
+  });
+
+  @override
+  State<ExportPage> createState() => _ExportPageState();
+}
+
+class _ExportPageState extends State<ExportPage> {
+  final nameCtrl = TextEditingController();
+  bool lockConfig = true;
+  bool hasExpire = false;
+  DateTime? expireDate;
+  String? generatedLink;
+
+  void generateLink() {
+    if (nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Mets un nom à la configuration")),
+      );
+      return;
+    }
+
+    final data = {
+      "app": "KČØ4P VPN",
+      "name": nameCtrl.text.trim(),
+      "mode": widget.mode,
+      "host": widget.host,
+      "config": widget.config,
+      "locked": lockConfig,
+      "expire_date": hasExpire && expireDate != null
+          ? expireDate!.toIso8601String()
+          : null,
+      "created_at": DateTime.now().toIso8601String(),
+    };
+
+    String content = jsonEncode(data);
+
+    if (lockConfig) {
+      content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
+    }
+
+    final link = "kco4p://config/${base64.encode(utf8.encode(content))}";
+
+    setState(() {
+      generatedLink = link;
+    });
+
+    Clipboard.setData(ClipboardData(text: link));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Lien copié dans le presse-papiers !"),
+        backgroundColor: Color(0xFF22C55E),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+        title: const Text("Exporter en Lien", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Nom de la configuration",
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(
+                hintText: "Ex: Serveur MTN Cameroun",
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: SwitchListTile(
+                title: const Text("Lock config"),
+                subtitle: const Text("Configuration verrouillée (recommandé)"),
+                value: lockConfig,
+                activeColor: const Color(0xFF0EA5E9),
+                onChanged: (v) => setState(() => lockConfig = v),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text("Date d'expiration"),
+                    value: hasExpire,
+                    activeColor: const Color(0xFF0EA5E9),
+                    onChanged: (v) => setState(() => hasExpire = v),
+                  ),
+                  if (hasExpire)
+                    ListTile(
+                      title: Text(
+                        expireDate == null
+                            ? "Choisir une date"
+                            : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}",
+                      ),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now().add(const Duration(days: 30)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2035),
+                        );
+                        if (picked != null) {
+                          setState(() => expireDate = picked);
+                        }
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: generateLink,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF22C55E),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Générer le lien",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            if (generatedLink != null) ...[
+              const SizedBox(height: 20),
+              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(
+                  generatedLink!,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
-    ),
-    const SizedBox(width: 8),
-    Expanded(
-      child: ElevatedButton.icon(
-        onPressed: isLocked
-            ? null
-            : () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ExportPage(
-                      mode: modeSelectionne,
-                      host: hostCtrl.text,
-                      config: configCtrl.text,
+    );
+  }
+}
+
+// ==================== PAGE LOGS ====================
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+  const LogsScreen({super.key, required this.logs});
+
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use") || log.contains("Import")) {
+      return const Color(0xFF22C55E);
+    }
+    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) {
+      return const Color(0xFFEF4444);
+    }
+    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
+      return const Color(0xFFF59E0B);
+    }
+    return Colors.black87;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+        title: const Text("Logs", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: logs.isEmpty
+          ? const Center(child: Text("Aucun log pour le moment"))
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: logs.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final log = logs[i];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    log,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: _getLogColor(log),
+                      fontWeight: log.contains("ready to use")
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 );
               },
-        icon: const Icon(Icons.link, size: 18),
-        label: const Text("Export"),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF0E7490), // Cyan foncé au lieu de 0xFF22C55E
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      ),
-    ),
-  ],
-),
-const Spacer(),
-Text(
-  "DEV : kcørp tech serf",
-  style: TextStyle(color: Colors.grey.shade600, fontSize: 12), // Gris adapté dark
-),
+            ),
+    );
+  }
+}
