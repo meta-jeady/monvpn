@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fl_chart/fl_chart.dart'; // AJOUTÉ
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,13 +23,16 @@ class Kco4pVPNApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFE0F2FE),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0EA5E9),
-          primary: const Color(0xFF0EA5E9),
-          secondary: const Color(0xFF22C55E),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0B1120), // Dark navy
+        colorScheme: ColorScheme.dark(
+          primary: const Color(0xFF06B6D4), // Cyan neon
+          secondary: const Color(0xFF10B981), // Vert success
+          surface: const Color(0xFF1E293B), // Cards
+          error: const Color(0xFFEF4444),
         ),
+        cardColor: const Color(0xFF1E293B),
+        dialogBackgroundColor: const Color(0xFF1E293B),
       ),
       home: const HomeScreen(),
     );
@@ -53,6 +55,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String modeSelectionne = "VLESS / VMess";
   bool isLocked = false;
 
+  // NOUVEAU : Stats réseau
+  int ping = -1;
+  String upload = "0 B/s";
+  String download = "0 B/s";
+  int duration = 0;
+
   String? lockedHost;
   String? lockedConfig;
   String? lockedName;
@@ -69,11 +77,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
-  // AJOUTÉ - Variables pour le graph
-  final List<FlSpot> uploadSpots = [];
-  final List<FlSpot> downloadSpots = [];
-  int tick = 0;
-
   @override
   void initState() {
     super.initState();
@@ -82,18 +85,12 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!mounted) return;
         final state = status.state.toUpperCase();
 
-        // AJOUTÉ - Mise à jour du graph
-        if (state == "CONNECTED") {
-          tick++;
-          uploadSpots.add(FlSpot(tick.toDouble(), (status.uploadSpeed?? 0) / 1024));
-          downloadSpots.add(FlSpot(tick.toDouble(), (status.downloadSpeed?? 0) / 1024));
-          if (uploadSpots.length > 30) {
-            uploadSpots.removeAt(0);
-            downloadSpots.removeAt(0);
-          }
-        }
-
         setState(() {
+          // NOUVEAU : Mise à jour débit + durée
+          upload = _formatBytes(status.uploadSpeed);
+          download = _formatBytes(status.downloadSpeed);
+          duration = status.duration;
+
           if (state == "CONNECTED") {
             if (statut!= "FREE SERF") {
               addLog("→ ready to use");
@@ -104,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text("Connected successfully"),
-                  backgroundColor: Color(0xFF22C55E),
+                  backgroundColor: Color(0xFF10B981),
                   duration: Duration(seconds: 2),
                 ),
               );
@@ -117,16 +114,32 @@ class _HomeScreenState extends State<HomeScreen> {
             statut = "DÉCONNECTÉ";
             estConnecte = false;
             enCours = false;
-            // AJOUTÉ - Reset graph
-            uploadSpots.clear();
-            downloadSpots.clear();
-            tick = 0;
+            ping = -1;
+            upload = "0 B/s";
+            download = "0 B/s";
+            duration = 0;
           }
         });
       },
     );
     initCore();
     loadLockedConfig();
+  }
+
+  // NOUVEAU : Formatage bytes en KB/MB
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return "$bytes B/s";
+    if (bytes < 1024 * 1024) return "${(bytes / 1024).toStringAsFixed(1)} KB/s";
+    return "${(bytes / 1024 / 1024).toStringAsFixed(1)} MB/s";
+  }
+
+  String _formatDuration(int seconds) {
+    final d = Duration(seconds: seconds);
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    final h = twoDigits(d.inHours);
+    final m = twoDigits(d.inMinutes.remainder(60));
+    final s = twoDigits(d.inSeconds.remainder(60));
+    return "$h:$m:$s";
   }
 
   Future<void> initCore() async {
@@ -184,6 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final time = DateTime.now().toString().substring(11, 19);
     setState(() {
       logs.add("[$time] $safeMsg");
+      if (logs.length > 300) logs.removeAt(0); // Fix fuite mémoire
     });
   }
 
@@ -210,8 +224,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-        !raw.startsWith("vmess://") &&
-        !raw.startsWith("trojan://")) {
+         !raw.startsWith("vmess://") &&
+         !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -247,10 +261,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // NOUVEAU : Test de ping avant connexion
+  Future<void> testPing() async {
+    final raw = isLocked? (lockedConfig?? "") : configCtrl.text.trim();
+    if (raw.isEmpty) return;
+
+    setState(() => ping = -2); // -2 = testing
+    addLog("Test ping...");
+
+    try {
+      final delay = await v2ray.getServerDelay(config: buildFinalConfig(raw, hostCtrl.text)?? raw);
+      if (!mounted) return;
+      setState(() => ping = delay);
+      addLog("Ping: ${delay}ms");
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => ping = -1);
+      addLog("Ping échoué");
+    }
+  }
+
   Future<void> toggle() async {
     if (estConnecte || enCours) {
       addLog("Déconnexion...");
       await v2ray.stopV2Ray();
+      if (!mounted) return;
       setState(() {
         estConnecte = false;
         enCours = false;
@@ -298,6 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final ok = await v2ray.requestPermission();
       if (!ok) {
         addLog("Permission refusée");
+        if (!mounted) return;
         setState(() {
           enCours = false;
           statut = "PERMISSION REFUSÉE";
@@ -313,6 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (e) {
       addLog("Échec: $e");
+      if (!mounted) return;
       setState(() {
         enCours = false;
         statut = "ÉCHEC";
@@ -327,6 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
           title: const Text("Importer une configuration"),
           content: TextField(
             controller: linkCtrl,
@@ -344,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context, linkCtrl.text.trim()),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9),
+                backgroundColor: const Color(0xFF06B6D4),
                 foregroundColor: Colors.white,
               ),
               child: const Text("Importer"),
@@ -431,11 +469,15 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-            ? "Config verrouillée importée : $name"
+             ? "Config verrouillée importée : $name"
               : "Importé : $name"),
-          backgroundColor: const Color(0xFF22C55E),
+          backgroundColor: const Color(0xFF10B981),
         ),
       );
+
+      // NOUVEAU : Test ping auto après import
+      testPing();
+
     } catch (e) {
       addLog("Erreur import : $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -455,6 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
         title: const Text("Effacer la configuration"),
         content: Text(
           "Supprimer définitivement la configuration \"${lockedName?? 'verrouillée'}\"?\n\nL'app redeviendra vierge.",
@@ -497,6 +540,7 @@ class _HomeScreenState extends State<HomeScreen> {
       estConnecte = false;
       enCours = false;
       logs.clear();
+      ping = -1;
     });
 
     addLog("App réinitialisée - configuration supprimée");
@@ -509,7 +553,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF22C55E);
+    if (estConnecte) return const Color(0xFF10B981);
     if (enCours) return const Color(0xFFF59E0B);
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
@@ -527,18 +571,18 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
+      backgroundColor: const Color(0xFF0B1120),
       appBar: AppBar(
         title: const Text(
           "KČØ4P VPN",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0EA5E9),
+        backgroundColor: const Color(0xFF0B1120),
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.article_outlined, color: Colors.white),
+            icon: const Icon(Icons.article_outlined, color: Colors.white70),
             onPressed: () {
               Navigator.push(
                 context,
@@ -555,24 +599,25 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.black54, fontSize: 13),
+                style: TextStyle(color: Colors.white54, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
                   underline: const SizedBox(),
+                  dropdownColor: const Color(0xFF1E293B),
                   items: modes
-                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                    .toList(),
+                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                     .toList(),
                   onChanged: isLocked
-                    ? null
+                     ? null
                       : (value) {
                           if (value!= null) {
                             setState(() => modeSelectionne = value);
@@ -584,9 +629,9 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -595,7 +640,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       statut,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: estConnecte? const Color(0xFF22C55E) : couleur,
+                        color: estConnecte? const Color(0xFF10B981) : couleur,
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
@@ -608,141 +653,93 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: TextStyle(color: Colors.orange, fontSize: 12),
                         ),
                       ),
-                  ],
-                ),
-              ),
-              // AJOUTÉ - Widget Graph Trafic Réseau
-if (estConnecte && uploadSpots.isNotEmpty)
-  Container(
-    height: 120,
-    padding: const EdgeInsets.all(12),
-    margin: const EdgeInsets.only(top: 20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
-        )
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+                    // NOUVEAU : Affichage stats si connecté
+                    if (estConnecte)...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _StatItem(icon: Icons.timer, label: _formatDuration(duration)),
+                          _StatItem(icon: Icons.arrow_upward, label: upload, color: Colors.orange),
+                          _StatItem(icon: Icons.arrow_downward, label: download, color: const Color(0xFF06B6D4)),
+                        ],
+                      ),
+                    ],
+                    // Nouveau affiche stats si connecter
+Container(
+  width: double.infinity,
+  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+  decoration: BoxDecoration(
+    color: const Color(0xFF1E293B),
+    borderRadius: BorderRadius.circular(12),
+  ),
+  child: Column(
+    children: [
+      Text(
+        statut,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: estConnecte ? const Color(0xFF10B981) : couleur,
+          fontSize: 17,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      if (isLocked)
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text(
+            "🔒 Configuration verrouillée",
+            style: TextStyle(color: Colors.orange, fontSize: 12),
+          ),
+        ),
+      // Affichage stats si connecté
+      if (estConnecte) ...[
+        const SizedBox(height: 8),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            const Text(
-              "Trafic réseau",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.black54,
-              ),
+            _StatItem(
+              icon: Icons.timer,
+              label: _formatDuration(duration),
             ),
-            Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF22C55E),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  "Down",
-                  style: TextStyle(fontSize: 10, color: Colors.black54),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0EA5E9),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  "Up",
-                  style: TextStyle(fontSize: 10, color: Colors.black54),
-                ),
-              ],
+            _StatItem(
+              icon: Icons.arrow_upward,
+              label: upload,
+              color: Colors.orange,
+            ),
+            _StatItem(
+              icon: Icons.arrow_downward,
+              label: download,
+              color: const Color(0xFF06B6D4),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(show: false),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                rightTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                topTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-              ),
-              borderData: FlBorderData(show: false),
-              minX: uploadSpots.isNotEmpty ? uploadSpots.first.x : 0,
-              maxX: uploadSpots.isNotEmpty ? uploadSpots.last.x : 30,
-              minY: 0,
-              lineBarsData: [
-                // Courbe Download - Vert
-                LineChartBarData(
-                  spots: downloadSpots,
-                  isCurved: true,
-                  color: const Color(0xFF22C55E),
-                  barWidth: 2,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(show: false),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF22C55E).withOpacity(0.3),
-                        const Color(0xFF22C55E).withOpacity(0.0),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-                // Courbe Upload - Bleu  
-                LineChartBarData(
-                  spots: uploadSpots,
-                  isCurved: true,
-                  color: const Color(0xFF0EA5E9),
-                  barWidth: 2,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(show: false),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF0EA5E9).withOpacity(0.3),
-                        const Color(0xFF0EA5E9).withOpacity(0.0),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-              ],
+      ],
+      // Affichage ping
+      if (ping >= 0)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            "Ping: ${ping}ms",
+            style: TextStyle(
+              color: ping < 100
+                  ? const Color(0xFF10B981)
+                  : ping < 200
+                      ? Colors.orange
+                      : Colors.red,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-      ],
-    ),
-  ), // <- N'oublie pas cette virgule
+      if (ping == -2)
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            "Test ping...",
+            style: TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ),
+    ],
+  ),
+),
