@@ -19,52 +19,18 @@ class Kco4pVPNApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KČØ4P VPN Pro',
+      title: 'KČØ4P VPN',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.dark,
-        // DARK CYAN MODE
-        scaffoldBackgroundColor: const Color(0xFF0F172A), // Slate 900
+        brightness: Brightness.dark, // SEUL AJOUT
+        // COULEURS ÉCHANGÉES ICI 👇
+        scaffoldBackgroundColor: const Color(0xFF0F172A), // Était 0xFFE0F2FE
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF06B6D4), // Cyan 500
-          brightness: Brightness.dark,
-          primary: const Color(0xFF06B6D4), // Cyan 500 - accent principal
-          secondary: const Color(0xFF0E7490), // Cyan 700 - secondaire
-          surface: const Color(0xFF1E293B), // Slate 800 - cartes/champs
-          background: const Color(0xFF0F172A), // Slate 900 - fond
-          error: const Color(0xFFEF4444),
-        ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF1E293B),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFF1E293B),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF334155)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF06B6D4), width: 2),
-          ),
-        ),
-        dropdownMenuTheme: DropdownMenuThemeData(
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFF1E293B),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
+          seedColor: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
+          brightness: Brightness.dark, // AJOUT
+          primary: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
+          secondary: const Color(0xFF0E7490), // Était 0xFF22C55E
         ),
       ),
       home: const HomeScreen(),
@@ -123,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text("Connected successfully"),
-                  backgroundColor: Color(0xFF06B6D4), // Cyan
+                  backgroundColor: Color(0xFF06B6D4), // Était 0xFF22C55E
                   duration: Duration(seconds: 2),
                 ),
               );
@@ -225,8 +191,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-       !raw.startsWith("vmess://") &&
-       !raw.startsWith("trojan://")) {
+        !raw.startsWith("vmess://") &&
+        !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -342,13 +308,13 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
           title: const Text("Importer une configuration"),
           content: TextField(
             controller: linkCtrl,
             maxLines: 5,
             decoration: const InputDecoration(
               hintText: "Colle ici le lien kco4p://...",
+              border: OutlineInputBorder(),
             ),
           ),
           actions: [
@@ -359,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context, linkCtrl.text.trim()),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF06B6D4), // Cyan
+                backgroundColor: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
                 foregroundColor: Colors.white,
               ),
               child: const Text("Importer"),
@@ -446,9 +412,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-           ? "Config verrouillée importée : $name"
+            ? "Config verrouillée importée : $name"
               : "Importé : $name"),
-          backgroundColor: const Color(0xFF06B6D4), // Cyan
+          backgroundColor: const Color(0xFF0E7490), // Était 0xFF22C55E
         ),
       );
     } catch (e) {
@@ -470,7 +436,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
         title: const Text("Effacer la configuration"),
         content: Text(
           "Supprimer définitivement la configuration \"${lockedName?? 'verrouillée'}\"?\n\nL'app redeviendra vierge.",
@@ -525,35 +490,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF06B6D4); // Cyan si connecté
-    if (enCours) return const Color(0xFFF59E0B); // Orange
+    if (estConnecte) return const Color(0xFF06B6D4); // Était 0xFF22C55E
+    if (enCours) return const Color(0xFFF59E0B);
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
-      return const Color(0xFF64748B); // Slate 500
+      return const Color(0xFF6B7280);
     }
-    return const Color(0xFFEF4444); // Rouge déconnecté
-  }
-
-  void _showAboutDialog() {
-    showAboutDialog(
-      context: context,
-      applicationName: 'KČØ4P VPN Pro',
-      applicationVersion: '1.0.0 Pro',
-      applicationIcon: const Icon(Icons.shield_moon_rounded, size: 50, color: Color(0xFF06B6D4)),
-      children: [
-        const Text(
-          'KČØ4P VPN Pro - Édition Dark Cyan\n\n'
-          'Client VPN sécurisé basé sur Xray/V2Ray avec interface professionnelle.\n\n'
-          'Fonctionnalités Pro :\n'
-          '• Support VLESS, VMess, Trojan\n'
-          '• Import/Export chiffré\n'
-          '• Mode verrouillé enterprise\n'
-          '• Logs détaillés\n'
-          '• Thème Dark Cyan optimisé OLED\n\n'
-          'Développé par kcørp tech serf.',
-          style: TextStyle(height: 1.5),
-        ),
-      ],
-    );
+    return const Color(0xFFEF4444);
   }
 
   @override
@@ -566,24 +508,18 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0F172A), // Était 0xFFE0F2FE
       appBar: AppBar(
         title: const Text(
-          "KČØ4P VPN PRO",
-          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.2),
+          "KČØ4P VPN",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFF06B6D4), // Était 0xFF0EA5E9
         elevation: 0,
-        scrolledUnderElevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.info_outline, color: Color(0xFF06B6D4)),
-            onPressed: _showAboutDialog,
-            tooltip: 'À propos',
-          ),
-          IconButton(
-            icon: const Icon(Icons.article_outlined, color: Color(0xFF06B6D4)),
+            icon: const Icon(Icons.article_outlined, color: Colors.white),
             onPressed: () {
               Navigator.push(
                 context,
@@ -598,29 +534,28 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Text(
+              const Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                style: TextStyle(color: Colors.grey, fontSize: 13), // Était black54
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: const Color(0xFF1E293B), // Était Colors.white
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF334155)),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
                   underline: const SizedBox(),
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white),
+                  dropdownColor: const Color(0xFF1E293B), // AJOUT pour dark
+                  style: const TextStyle(color: Colors.white), // AJOUT
                   items: modes
-                   .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                   .toList(),
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
                   onChanged: isLocked
-                   ? null
+                    ? null
                       : (value) {
                           if (value!= null) {
                             setState(() => modeSelectionne = value);
@@ -630,112 +565,92 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-Container(
-  width: double.infinity,
-  padding: const EdgeInsets.symmetric(vertical: 16),
-  decoration: BoxDecoration(
-    color: const Color(0xFF1E293B),
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: const Color(0xFF334155)),
-  ),
-  child: Column(
-    children: [
-      Text(
-        statut,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: couleur,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.1,
-        ),
-      ),
-      if (isLocked)
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.lock_rounded, color: Color(0xFFF59E0B), size: 14),
-              const SizedBox(width: 4),
-              Text(
-                "CONFIGURATION VERROUILLÉE",
-                style: TextStyle(
-                  color: Colors.amber.shade400, 
-                  fontSize: 11, 
-                  fontWeight: FontWeight.w600
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B), // Était Colors.white
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      statut,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: estConnecte? const Color(0xFF06B6D4) : couleur, // Était 0xFF22C55E
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (isLocked)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text(
+                          "🔒 Configuration verrouillée",
+                          style: TextStyle(color: Colors.orange, fontSize: 12),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-    ],
-  ),
-),
-const SizedBox(height: 24),
-GestureDetector(
-  onTap: enCours ? null : toggle,
-  child: AnimatedContainer(
-    duration: const Duration(milliseconds: 300),
-    width: 150,
-    height: 150,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: const Color(0xFF1E293B),
-      border: Border.all(color: couleur, width: 4),
-      boxShadow: [
-        BoxShadow(
-          color: couleur.withOpacity(0.4),
-          blurRadius: 30,
-          spreadRadius: 4,
-        ),
-        BoxShadow(
-          color: Colors.black.withOpacity(0.3),
-          blurRadius: 20,
-          offset: const Offset(0, 10),
-        )
-      ],
-    ),
-    child: Icon(
-      Icons.power_settings_new_rounded,
-      size: 70,
-      color: couleur,
-    ),
-  ),
-),
-const SizedBox(height: 24),
-Align(
-  alignment: Alignment.centerLeft,
-  child: Text(
-    "HOST (domaine de ton pays)",
-    style: TextStyle(
-      color: Colors.grey.shade400, 
-      fontSize: 12, 
-      fontWeight: FontWeight.w500
-    ),
-  ),
-),
-const SizedBox(height: 6),
-TextField(
-  controller: hostCtrl,
-  enabled: !isLocked,
-  obscureText: isLocked,
-  style: const TextStyle(color: Colors.white),
-  decoration: InputDecoration(
-    hintText: "Exemple: yamo.mtn.cm",
-    hintStyle: TextStyle(color: Colors.grey.shade600),
-  ),
-),
-const SizedBox(height: 12),
-Align(
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: enCours? null : toggle,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF1E293B), // Était Colors.white
+                    border: Border.all(color: couleur, width: 4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: couleur.withOpacity(0.3),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      )
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.power_settings_new_rounded,
+                    size: 65,
+                    color: couleur,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "HOST (domaine de ton pays)",
+                  style: TextStyle(color: Colors.grey, fontSize: 12), // Était black54
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: hostCtrl,
+                enabled:!isLocked,
+                obscureText: isLocked,
+                style: const TextStyle(color: Colors.white), // AJOUT
+                decoration: InputDecoration(
+                  hintText: "Exemple: yamo.mtn.cm",
+                  hintStyle: TextStyle(color: Colors.grey.shade600), // AJOUT
+                  filled: true,
+                  fillColor: isLocked? const Color(0xFF334155) : const Color(0xFF1E293B), // Était grey.shade200 : Colors.white
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+const Align(
   alignment: Alignment.centerLeft,
   child: Text(
     "CONFIGURATION",
-    style: TextStyle(
-      color: Colors.grey.shade400, 
-      fontSize: 12, 
-      fontWeight: FontWeight.w500
-    ),
+    style: TextStyle(color: Colors.grey, fontSize: 12),
   ),
 ),
 const SizedBox(height: 6),
@@ -747,6 +662,12 @@ TextField(
   decoration: InputDecoration(
     hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
     hintStyle: TextStyle(color: Colors.grey.shade600),
+    filled: true,
+    fillColor: isLocked ? const Color(0xFF334155) : const Color(0xFF1E293B),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide.none,
+    ),
   ),
 ),
 const SizedBox(height: 16),
@@ -756,15 +677,14 @@ Row(
       child: ElevatedButton.icon(
         onPressed: importConfig,
         icon: const Icon(Icons.download_rounded, size: 18),
-        label: const Text("Import", style: TextStyle(fontWeight: FontWeight.w600)),
+        label: const Text("Import"),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF06B6D4), // Cyan
+          backgroundColor: const Color(0xFF06B6D4), // Cyan au lieu de 0xFF0EA5E9
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
-          elevation: 0,
         ),
       ),
     ),
@@ -773,17 +693,15 @@ Row(
       child: ElevatedButton.icon(
         onPressed: isLocked ? cleanConfig : null,
         icon: const Icon(Icons.delete_forever_rounded, size: 18),
-        label: const Text("Clean", style: TextStyle(fontWeight: FontWeight.w600)),
+        label: const Text("Clean"),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFEF4444),
           foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFF334155),
-          disabledForegroundColor: Colors.grey.shade600,
+          disabledBackgroundColor: const Color(0xFF334155), // Slate 700 au lieu de grey.shade300
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
-          elevation: 0,
         ),
       ),
     ),
@@ -805,17 +723,14 @@ Row(
                 );
               },
         icon: const Icon(Icons.link, size: 18),
-        label: const Text("Export", style: TextStyle(fontWeight: FontWeight.w600)),
+        label: const Text("Export"),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF0E7490), // Cyan foncé
+          backgroundColor: const Color(0xFF0E7490), // Cyan foncé au lieu de 0xFF22C55E
           foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFF334155),
-          disabledForegroundColor: Colors.grey.shade600,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
-          elevation: 0,
         ),
       ),
     ),
@@ -824,5 +739,5 @@ Row(
 const Spacer(),
 Text(
   "DEV : kcørp tech serf",
-  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+  style: TextStyle(color: Colors.grey.shade600, fontSize: 12), // Gris adapté dark
 ),
