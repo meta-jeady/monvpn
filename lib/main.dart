@@ -19,20 +19,53 @@ class Kco4pVPNApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KČØ4P VPN',
+      title: 'KČØ4P VPN Pro',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B1120), // Dark navy
-        colorScheme: ColorScheme.dark(
-          primary: const Color(0xFF06B6D4), // Cyan neon
-          secondary: const Color(0xFF10B981), // Vert success
-          surface: const Color(0xFF1E293B), // Cards
+        // DARK CYAN MODE
+        scaffoldBackgroundColor: const Color(0xFF0F172A), // Slate 900
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF06B6D4), // Cyan 500
+          brightness: Brightness.dark,
+          primary: const Color(0xFF06B6D4), // Cyan 500 - accent principal
+          secondary: const Color(0xFF0E7490), // Cyan 700 - secondaire
+          surface: const Color(0xFF1E293B), // Slate 800 - cartes/champs
+          background: const Color(0xFF0F172A), // Slate 900 - fond
           error: const Color(0xFFEF4444),
         ),
-        cardColor: const Color(0xFF1E293B),
-        dialogBackgroundColor: const Color(0xFF1E293B),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF1E293B),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1E293B),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF334155)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF06B6D4), width: 2),
+          ),
+        ),
+        dropdownMenuTheme: DropdownMenuThemeData(
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: const Color(0xFF1E293B),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
       ),
       home: const HomeScreen(),
     );
@@ -54,12 +87,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool enCours = false;
   String modeSelectionne = "VLESS / VMess";
   bool isLocked = false;
-
-  // NOUVEAU : Stats réseau
-  int ping = -1;
-  String upload = "0 B/s";
-  String download = "0 B/s";
-  int duration = 0;
 
   String? lockedHost;
   String? lockedConfig;
@@ -86,11 +113,6 @@ class _HomeScreenState extends State<HomeScreen> {
         final state = status.state.toUpperCase();
 
         setState(() {
-          // NOUVEAU : Mise à jour débit + durée
-          upload = _formatBytes(status.uploadSpeed);
-          download = _formatBytes(status.downloadSpeed);
-          duration = status.duration;
-
           if (state == "CONNECTED") {
             if (statut!= "FREE SERF") {
               addLog("→ ready to use");
@@ -101,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text("Connected successfully"),
-                  backgroundColor: Color(0xFF10B981),
+                  backgroundColor: Color(0xFF06B6D4), // Cyan
                   duration: Duration(seconds: 2),
                 ),
               );
@@ -114,32 +136,12 @@ class _HomeScreenState extends State<HomeScreen> {
             statut = "DÉCONNECTÉ";
             estConnecte = false;
             enCours = false;
-            ping = -1;
-            upload = "0 B/s";
-            download = "0 B/s";
-            duration = 0;
           }
         });
       },
     );
     initCore();
     loadLockedConfig();
-  }
-
-  // NOUVEAU : Formatage bytes en KB/MB
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return "$bytes B/s";
-    if (bytes < 1024 * 1024) return "${(bytes / 1024).toStringAsFixed(1)} KB/s";
-    return "${(bytes / 1024 / 1024).toStringAsFixed(1)} MB/s";
-  }
-
-  String _formatDuration(int seconds) {
-    final d = Duration(seconds: seconds);
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    final h = twoDigits(d.inHours);
-    final m = twoDigits(d.inMinutes.remainder(60));
-    final s = twoDigits(d.inSeconds.remainder(60));
-    return "$h:$m:$s";
   }
 
   Future<void> initCore() async {
@@ -197,7 +199,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final time = DateTime.now().toString().substring(11, 19);
     setState(() {
       logs.add("[$time] $safeMsg");
-      if (logs.length > 300) logs.removeAt(0); // Fix fuite mémoire
     });
   }
 
@@ -224,8 +225,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-         !raw.startsWith("vmess://") &&
-         !raw.startsWith("trojan://")) {
+       !raw.startsWith("vmess://") &&
+       !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -261,31 +262,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // NOUVEAU : Test de ping avant connexion
-  Future<void> testPing() async {
-    final raw = isLocked? (lockedConfig?? "") : configCtrl.text.trim();
-    if (raw.isEmpty) return;
-
-    setState(() => ping = -2); // -2 = testing
-    addLog("Test ping...");
-
-    try {
-      final delay = await v2ray.getServerDelay(config: buildFinalConfig(raw, hostCtrl.text)?? raw);
-      if (!mounted) return;
-      setState(() => ping = delay);
-      addLog("Ping: ${delay}ms");
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => ping = -1);
-      addLog("Ping échoué");
-    }
-  }
-
   Future<void> toggle() async {
     if (estConnecte || enCours) {
       addLog("Déconnexion...");
       await v2ray.stopV2Ray();
-      if (!mounted) return;
       setState(() {
         estConnecte = false;
         enCours = false;
@@ -333,7 +313,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final ok = await v2ray.requestPermission();
       if (!ok) {
         addLog("Permission refusée");
-        if (!mounted) return;
         setState(() {
           enCours = false;
           statut = "PERMISSION REFUSÉE";
@@ -349,7 +328,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (e) {
       addLog("Échec: $e");
-      if (!mounted) return;
       setState(() {
         enCours = false;
         statut = "ÉCHEC";
@@ -371,7 +349,6 @@ class _HomeScreenState extends State<HomeScreen> {
             maxLines: 5,
             decoration: const InputDecoration(
               hintText: "Colle ici le lien kco4p://...",
-              border: OutlineInputBorder(),
             ),
           ),
           actions: [
@@ -382,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context, linkCtrl.text.trim()),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF06B6D4),
+                backgroundColor: const Color(0xFF06B6D4), // Cyan
                 foregroundColor: Colors.white,
               ),
               child: const Text("Importer"),
@@ -469,15 +446,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-             ? "Config verrouillée importée : $name"
+           ? "Config verrouillée importée : $name"
               : "Importé : $name"),
-          backgroundColor: const Color(0xFF10B981),
+          backgroundColor: const Color(0xFF06B6D4), // Cyan
         ),
       );
-
-      // NOUVEAU : Test ping auto après import
-      testPing();
-
     } catch (e) {
       addLog("Erreur import : $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -540,7 +513,6 @@ class _HomeScreenState extends State<HomeScreen> {
       estConnecte = false;
       enCours = false;
       logs.clear();
-      ping = -1;
     });
 
     addLog("App réinitialisée - configuration supprimée");
@@ -553,12 +525,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF10B981);
-    if (enCours) return const Color(0xFFF59E0B);
+    if (estConnecte) return const Color(0xFF06B6D4); // Cyan si connecté
+    if (enCours) return const Color(0xFFF59E0B); // Orange
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
-      return const Color(0xFF6B7280);
+      return const Color(0xFF64748B); // Slate 500
     }
-    return const Color(0xFFEF4444);
+    return const Color(0xFFEF4444); // Rouge déconnecté
+  }
+
+  void _showAboutDialog() {
+    showAboutDialog(
+      context: context,
+      applicationName: 'KČØ4P VPN Pro',
+      applicationVersion: '1.0.0 Pro',
+      applicationIcon: const Icon(Icons.shield_moon_rounded, size: 50, color: Color(0xFF06B6D4)),
+      children: [
+        const Text(
+          'KČØ4P VPN Pro - Édition Dark Cyan\n\n'
+          'Client VPN sécurisé basé sur Xray/V2Ray avec interface professionnelle.\n\n'
+          'Fonctionnalités Pro :\n'
+          '• Support VLESS, VMess, Trojan\n'
+          '• Import/Export chiffré\n'
+          '• Mode verrouillé enterprise\n'
+          '• Logs détaillés\n'
+          '• Thème Dark Cyan optimisé OLED\n\n'
+          'Développé par kcørp tech serf.',
+          style: TextStyle(height: 1.5),
+        ),
+      ],
+    );
   }
 
   @override
@@ -571,18 +566,24 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1120),
+      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
         title: const Text(
-          "KČØ4P VPN",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          "KČØ4P VPN PRO",
+          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.2),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0B1120),
+        backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.article_outlined, color: Colors.white70),
+            icon: const Icon(Icons.info_outline, color: Color(0xFF06B6D4)),
+            onPressed: _showAboutDialog,
+            tooltip: 'À propos',
+          ),
+          IconButton(
+            icon: const Icon(Icons.article_outlined, color: Color(0xFF06B6D4)),
             onPressed: () {
               Navigator.push(
                 context,
@@ -597,9 +598,9 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              const Text(
+              Text(
                 "Sélectionne le mode de configuration",
-                style: TextStyle(color: Colors.white54, fontSize: 13),
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Container(
@@ -607,17 +608,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF334155)),
                 ),
                 child: DropdownButton<String>(
                   value: modeSelectionne,
                   isExpanded: true,
                   underline: const SizedBox(),
                   dropdownColor: const Color(0xFF1E293B),
+                  style: const TextStyle(color: Colors.white),
                   items: modes
-                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                     .toList(),
+                   .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                   .toList(),
                   onChanged: isLocked
-                     ? null
+                   ? null
                       : (value) {
                           if (value!= null) {
                             setState(() => modeSelectionne = value);
@@ -627,51 +630,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      statut,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: estConnecte? const Color(0xFF10B981) : couleur,
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (isLocked)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text(
-                          "🔒 Configuration verrouillée",
-                          style: TextStyle(color: Colors.orange, fontSize: 12),
-                        ),
-                      ),
-                    // NOUVEAU : Affichage stats si connecté
-                    if (estConnecte)...[
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _StatItem(icon: Icons.timer, label: _formatDuration(duration)),
-                          _StatItem(icon: Icons.arrow_upward, label: upload, color: Colors.orange),
-                          _StatItem(icon: Icons.arrow_downward, label: download, color: const Color(0xFF06B6D4)),
-                        ],
-                      ),
-                    ],
-                    // Nouveau affiche stats si connecter
 Container(
   width: double.infinity,
-  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+  padding: const EdgeInsets.symmetric(vertical: 16),
   decoration: BoxDecoration(
     color: const Color(0xFF1E293B),
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: const Color(0xFF334155)),
   ),
   child: Column(
     children: [
@@ -679,92 +644,185 @@ Container(
         statut,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: estConnecte ? const Color(0xFF10B981) : couleur,
-          fontSize: 17,
+          color: couleur,
+          fontSize: 18,
           fontWeight: FontWeight.bold,
+          letterSpacing: 1.1,
         ),
       ),
       if (isLocked)
-        const Padding(
-          padding: EdgeInsets.only(top: 4),
-          child: Text(
-            "🔒 Configuration verrouillée",
-            style: TextStyle(color: Colors.orange, fontSize: 12),
-          ),
-        ),
-      // Affichage stats si connecté
-      if (estConnecte) ...[
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _StatItem(
-              icon: Icons.timer,
-              label: _formatDuration(duration),
-            ),
-            _StatItem(
-              icon: Icons.arrow_upward,
-              label: upload,
-              color: Colors.orange,
-            ),
-            _StatItem(
-              icon: Icons.arrow_downward,
-              label: download,
-              color: const Color(0xFF06B6D4),
-            ),
-          ],
-        ),
-      ],
-      // Affichage ping
-      if (ping >= 0)
         Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            "Ping: ${ping}ms",
-            style: TextStyle(
-              color: ping < 100
-                  ? const Color(0xFF10B981)
-                  : ping < 200
-                      ? Colors.orange
-                      : Colors.red,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      if (ping == -2)
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Text(
-            "Test ping...",
-            style: TextStyle(color: Colors.white54, fontSize: 12),
+          padding: const EdgeInsets.only(top: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock_rounded, color: Color(0xFFF59E0B), size: 14),
+              const SizedBox(width: 4),
+              Text(
+                "CONFIGURATION VERROUILLÉE",
+                style: TextStyle(
+                  color: Colors.amber.shade400, 
+                  fontSize: 11, 
+                  fontWeight: FontWeight.w600
+                ),
+              ),
+            ],
           ),
         ),
     ],
   ),
 ),
-} // <- accolade qui ferme class _HomeScreenState
-
-// COLLE ÇA ICI, EN DEHORS DE LA CLASSE
-class _StatItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color? color;
-
-  const _StatItem({required this.icon, required this.label, this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: color ?? Colors.white54),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(fontSize: 12, color: color ?? Colors.white70),
+const SizedBox(height: 24),
+GestureDetector(
+  onTap: enCours ? null : toggle,
+  child: AnimatedContainer(
+    duration: const Duration(milliseconds: 300),
+    width: 150,
+    height: 150,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: const Color(0xFF1E293B),
+      border: Border.all(color: couleur, width: 4),
+      boxShadow: [
+        BoxShadow(
+          color: couleur.withOpacity(0.4),
+          blurRadius: 30,
+          spreadRadius: 4,
         ),
+        BoxShadow(
+          color: Colors.black.withOpacity(0.3),
+          blurRadius: 20,
+          offset: const Offset(0, 10),
+        )
       ],
-    );
-  }
-}
+    ),
+    child: Icon(
+      Icons.power_settings_new_rounded,
+      size: 70,
+      color: couleur,
+    ),
+  ),
+),
+const SizedBox(height: 24),
+Align(
+  alignment: Alignment.centerLeft,
+  child: Text(
+    "HOST (domaine de ton pays)",
+    style: TextStyle(
+      color: Colors.grey.shade400, 
+      fontSize: 12, 
+      fontWeight: FontWeight.w500
+    ),
+  ),
+),
+const SizedBox(height: 6),
+TextField(
+  controller: hostCtrl,
+  enabled: !isLocked,
+  obscureText: isLocked,
+  style: const TextStyle(color: Colors.white),
+  decoration: InputDecoration(
+    hintText: "Exemple: yamo.mtn.cm",
+    hintStyle: TextStyle(color: Colors.grey.shade600),
+  ),
+),
+const SizedBox(height: 12),
+Align(
+  alignment: Alignment.centerLeft,
+  child: Text(
+    "CONFIGURATION",
+    style: TextStyle(
+      color: Colors.grey.shade400, 
+      fontSize: 12, 
+      fontWeight: FontWeight.w500
+    ),
+  ),
+),
+const SizedBox(height: 6),
+TextField(
+  controller: configCtrl,
+  enabled: !isLocked,
+  maxLines: 3,
+  style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white),
+  decoration: InputDecoration(
+    hintText: "Colle ton lien vless:// ou vmess:// ou JSON",
+    hintStyle: TextStyle(color: Colors.grey.shade600),
+  ),
+),
+const SizedBox(height: 16),
+Row(
+  children: [
+    Expanded(
+      child: ElevatedButton.icon(
+        onPressed: importConfig,
+        icon: const Icon(Icons.download_rounded, size: 18),
+        label: const Text("Import", style: TextStyle(fontWeight: FontWeight.w600)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF06B6D4), // Cyan
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+      ),
+    ),
+    const SizedBox(width: 8),
+    Expanded(
+      child: ElevatedButton.icon(
+        onPressed: isLocked ? cleanConfig : null,
+        icon: const Icon(Icons.delete_forever_rounded, size: 18),
+        label: const Text("Clean", style: TextStyle(fontWeight: FontWeight.w600)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFEF4444),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFF334155),
+          disabledForegroundColor: Colors.grey.shade600,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+      ),
+    ),
+    const SizedBox(width: 8),
+    Expanded(
+      child: ElevatedButton.icon(
+        onPressed: isLocked
+            ? null
+            : () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ExportPage(
+                      mode: modeSelectionne,
+                      host: hostCtrl.text,
+                      config: configCtrl.text,
+                    ),
+                  ),
+                );
+              },
+        icon: const Icon(Icons.link, size: 18),
+        label: const Text("Export", style: TextStyle(fontWeight: FontWeight.w600)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF0E7490), // Cyan foncé
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFF334155),
+          disabledForegroundColor: Colors.grey.shade600,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+      ),
+    ),
+  ],
+),
+const Spacer(),
+Text(
+  "DEV : kcørp tech serf",
+  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+),
