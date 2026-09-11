@@ -933,3 +933,161 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+// ============================================================
+// LogsScreen
+// ============================================================
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+
+  const LogsScreen({super.key, required this.logs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+        title: const Text("Logs", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: logs.isEmpty
+          ? const Center(child: Text("Aucun log pour le moment"))
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: logs.length,
+              itemBuilder: (context, index) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Text(
+                      logs[logs.length - 1 - index], // plus récent en haut
+                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+// ============================================================
+// ExportPage
+// ============================================================
+class ExportPage extends StatefulWidget {
+  final String mode;
+  final String host;
+  final String config;
+
+  const ExportPage({
+    super.key,
+    required this.mode,
+    required this.host,
+    required this.config,
+  });
+
+  @override
+  State<ExportPage> createState() => _ExportPageState();
+}
+
+class _ExportPageState extends State<ExportPage> {
+  final TextEditingController nameCtrl = TextEditingController(text: "Ma Config");
+  bool locked = false;
+  String? generatedLink;
+
+  void generate() {
+    final map = {
+      "app": "KČØ4P VPN",
+      "name": nameCtrl.text.trim().isEmpty ? "Configuration" : nameCtrl.text.trim(),
+      "mode": widget.mode,
+      "host": widget.host,
+      "config": widget.config,
+      "locked": locked,
+      "expire_date": null,
+    };
+
+    String jsonStr = jsonEncode(map);
+    String encoded = base64.encode(utf8.encode(jsonStr));
+
+    if (locked) {
+      encoded = "KCO4P_LOCKED:" + base64.encode(utf8.encode(jsonStr));
+    }
+
+    setState(() {
+      generatedLink = "kco4p://config/$encoded";
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+        title: const Text("Exporter la configuration", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: "Nom de la configuration",
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              title: const Text("Verrouiller la configuration"),
+              subtitle: const Text("Empêche la modification après import"),
+              value: locked,
+              activeColor: const Color(0xFF0EA5E9),
+              onChanged: (v) => setState(() => locked = v),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: generate,
+              icon: const Icon(Icons.link),
+              label: const Text("Générer le lien"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 20),
+            if (generatedLink != null) ...[
+              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              SelectableText(
+                generatedLink!,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: generatedLink!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Lien copié !")),
+                  );
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text("Copier le lien"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF22C55E),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
