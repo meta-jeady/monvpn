@@ -1,11 +1,8 @@
 import 'dart:convert';
-import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fl_chart/fl_chart.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,13 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
-  // ========== Graphique trafic ==========
-  final List<FlSpot> downloadSpots = [];
-  final List<FlSpot> uploadSpots = [];
-  Timer? _trafficTimer;
-  double _time = 0;
-  final Random _random = Random();
-
   @override
   void initState() {
     super.initState();
@@ -88,12 +78,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           if (state == "CONNECTED") {
-            if (statut != "FREE SERF") {
+            if (statut!= "FREE SERF") {
               addLog("→ ready to use");
               statut = "FREE SERF";
               estConnecte = true;
               enCours = false;
-              _startTrafficSimulation();
 
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -107,53 +96,16 @@ class _HomeScreenState extends State<HomeScreen> {
             statut = "CONNEXION...";
             enCours = true;
             estConnecte = false;
-            _stopTrafficSimulation();
           } else {
             statut = "DÉCONNECTÉ";
             estConnecte = false;
             enCours = false;
-            _stopTrafficSimulation();
           }
         });
       },
     );
     initCore();
     loadLockedConfig();
-  }
-
-  void _startTrafficSimulation() {
-    _stopTrafficSimulation();
-    downloadSpots.clear();
-    uploadSpots.clear();
-    _time = 0;
-
-    _trafficTimer = Timer.periodic(const Duration(milliseconds: 800), (timer) {
-      if (!mounted || !estConnecte) {
-        timer.cancel();
-        return;
-      }
-
-      setState(() {
-        _time += 1;
-        // Simulation réaliste (en Mb/s)
-        final download = 2.5 + _random.nextDouble() * 12 + sin(_time / 3) * 3;
-        final upload = 0.8 + _random.nextDouble() * 4 + cos(_time / 4) * 1.5;
-
-        downloadSpots.add(FlSpot(_time, download.clamp(0.5, 25)));
-        uploadSpots.add(FlSpot(_time, upload.clamp(0.2, 12)));
-
-        // Garder seulement les 20 derniers points
-        if (downloadSpots.length > 20) {
-          downloadSpots.removeAt(0);
-          uploadSpots.removeAt(0);
-        }
-      });
-    });
-  }
-
-  void _stopTrafficSimulation() {
-    _trafficTimer?.cancel();
-    _trafficTimer = null;
   }
 
   Future<void> initCore() async {
@@ -183,13 +135,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> loadLockedConfig() async {
     final prefs = await SharedPreferences.getInstance();
-    final locked = prefs.getBool('isLocked') ?? false;
+    final locked = prefs.getBool('isLocked')?? false;
 
     if (locked) {
       setState(() {
         isLocked = true;
         lockedName = prefs.getString('lockedName');
-        modeSelectionne = prefs.getString('lockedMode') ?? "VLESS / VMess";
+        modeSelectionne = prefs.getString('lockedMode')?? "VLESS / VMess";
         lockedHost = prefs.getString('lockedHost');
         lockedConfig = prefs.getString('lockedConfig');
         hostCtrl.text = "*******";
@@ -201,10 +153,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void addLog(String msg) {
     String safeMsg = msg;
-    if (lockedHost != null && lockedHost!.isNotEmpty) {
+    if (lockedHost!= null && lockedHost!.isNotEmpty) {
       safeMsg = safeMsg.replaceAll(lockedHost!, "*******");
     }
-    if (hostCtrl.text.isNotEmpty && hostCtrl.text != "*******") {
+    if (hostCtrl.text.isNotEmpty && hostCtrl.text!= "*******") {
       safeMsg = safeMsg.replaceAll(hostCtrl.text, "*******");
     }
 
@@ -237,8 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-          !raw.startsWith("vmess://") &&
-          !raw.startsWith("trojan://")) {
+         !raw.startsWith("vmess://") &&
+         !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -248,19 +200,19 @@ class _HomeScreenState extends State<HomeScreen> {
       final Map<String, dynamic> json = jsonDecode(full);
 
       if (host.isNotEmpty &&
-          json["outbounds"] != null &&
+          json["outbounds"]!= null &&
           json["outbounds"].isNotEmpty) {
         final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"] ?? {};
-        final network = stream["network"] ?? "ws";
+        final stream = outbound["streamSettings"]?? {};
+        final network = stream["network"]?? "ws";
 
         if (network == "ws") {
-          stream["wsSettings"] ??= {};
-          stream["wsSettings"]["headers"] ??= {};
+          stream["wsSettings"]??= {};
+          stream["wsSettings"]["headers"]??= {};
           stream["wsSettings"]["headers"]["Host"] = host;
           addLog("Host injecté: *******");
         } else if (network == "http" || network == "h2") {
-          stream["httpSettings"] ??= {};
+          stream["httpSettings"]??= {};
           stream["httpSettings"]["host"] = [host];
           addLog("Host HTTP injecté: *******");
         }
@@ -283,13 +235,12 @@ class _HomeScreenState extends State<HomeScreen> {
         enCours = false;
         statut = "DÉCONNECTÉ";
       });
-      _stopTrafficSimulation();
       addLog("Déconnecté");
       return;
     }
 
-    final raw = isLocked ? (lockedConfig ?? "") : configCtrl.text.trim();
-    final host = isLocked ? (lockedHost ?? "") : hostCtrl.text.trim();
+    final raw = isLocked? (lockedConfig?? "") : configCtrl.text.trim();
+    final host = isLocked? (lockedHost?? "") : hostCtrl.text.trim();
 
     if (raw.isEmpty) {
       addLog("Aucune configuration");
@@ -404,16 +355,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final map = jsonDecode(content);
 
-      if (map["app"] != "KČØ4P VPN") {
+      if (map["app"]!= "KČØ4P VPN") {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Lien non compatible")),
         );
         return;
       }
 
-      if (map["expire_date"] != null) {
+      if (map["expire_date"]!= null) {
         final expire = DateTime.tryParse(map["expire_date"]);
-        if (expire != null && DateTime.now().isAfter(expire)) {
+        if (expire!= null && DateTime.now().isAfter(expire)) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Cette configuration a expiré")),
           );
@@ -421,10 +372,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      final name = map["name"] ?? "Configuration";
-      final mode = map["mode"] ?? "VLESS / VMess";
-      final host = map["host"] ?? "";
-      final config = map["config"] ?? "";
+      final name = map["name"]?? "Configuration";
+      final mode = map["mode"]?? "VLESS / VMess";
+      final host = map["host"]?? "";
+      final config = map["config"]?? "";
       final locked = map["locked"] == true || wasLocked;
 
       if (locked) {
@@ -459,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-              ? "Config verrouillée importée : $name"
+             ? "Config verrouillée importée : $name"
               : "Importé : $name"),
           backgroundColor: const Color(0xFF22C55E),
         ),
@@ -485,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => AlertDialog(
         title: const Text("Effacer la configuration"),
         content: Text(
-          "Supprimer définitivement la configuration \"${lockedName ?? 'verrouillée'}\"?\n\nL'app redeviendra vierge.",
+          "Supprimer définitivement la configuration \"${lockedName?? 'verrouillée'}\"?\n\nL'app redeviendra vierge.",
         ),
         actions: [
           TextButton(
@@ -504,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm!= true) return;
 
     if (estConnecte || enCours) {
       await v2ray.stopV2Ray();
@@ -527,7 +478,6 @@ class _HomeScreenState extends State<HomeScreen> {
       logs.clear();
     });
 
-    _stopTrafficSimulation();
     addLog("App réinitialisée - configuration supprimée");
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -548,146 +498,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _stopTrafficSimulation();
     hostCtrl.dispose();
     configCtrl.dispose();
     super.dispose();
-  }
-
-  // ========== Widget du graphique ==========
-  Widget _buildTrafficChart() {
-    if (!estConnecte || downloadSpots.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      height: 160,
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Trafic en temps réel",
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              _legendDot(const Color(0xFF0EA5E9), "Download"),
-              const SizedBox(width: 16),
-              _legendDot(const Color(0xFF22C55E), "Upload"),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: 5,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: Colors.grey.shade200,
-                    strokeWidth: 1,
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 32,
-                      interval: 5,
-                      getTitlesWidget: (value, meta) {
-                        return Text(
-                          "${value.toInt()}",
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 10,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                minX: downloadSpots.first.x,
-                maxX: downloadSpots.last.x,
-                minY: 0,
-                maxY: 25,
-                lineBarsData: [
-                  // Download
-                  LineChartBarData(
-                    spots: downloadSpots,
-                    isCurved: true,
-                    color: const Color(0xFF0EA5E9),
-                    barWidth: 2.5,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xFF0EA5E9).withOpacity(0.15),
-                    ),
-                  ),
-                  // Upload
-                  LineChartBarData(
-                    spots: uploadSpots,
-                    isCurved: true,
-                    color: const Color(0xFF22C55E),
-                    barWidth: 2.5,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xFF22C55E).withOpacity(0.12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _legendDot(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-        ),
-      ],
-    );
   }
 
   @override
@@ -715,7 +528,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
@@ -735,12 +548,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   isExpanded: true,
                   underline: const SizedBox(),
                   items: modes
-                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                      .toList(),
+                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                     .toList(),
                   onChanged: isLocked
-                      ? null
+                     ? null
                       : (value) {
-                          if (value != null) {
+                          if (value!= null) {
                             setState(() => modeSelectionne = value);
                             addLog("Mode changé → $value");
                           }
@@ -761,7 +574,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       statut,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: estConnecte ? const Color(0xFF22C55E) : couleur,
+                        color: estConnecte? const Color(0xFF22C55E) : couleur,
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
@@ -779,7 +592,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 20),
               GestureDetector(
-                onTap: enCours ? null : toggle,
+                onTap: enCours? null : toggle,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: 140,
@@ -803,10 +616,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
-              // ========== GRAPHIQUE ==========
-              _buildTrafficChart(),
-
               const SizedBox(height: 20),
               const Align(
                 alignment: Alignment.centerLeft,
@@ -818,12 +627,12 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               TextField(
                 controller: hostCtrl,
-                enabled: !isLocked,
+                enabled:!isLocked,
                 obscureText: isLocked,
                 decoration: InputDecoration(
                   hintText: "Exemple: yamo.mtn.cm",
                   filled: true,
-                  fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
+                  fillColor: isLocked? Colors.grey.shade200 : Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -920,12 +729,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const Spacer(),
               const Text(
                 "DEV : kcørp tech serf",
                 style: TextStyle(color: Colors.black38, fontSize: 12),
               ),
-              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -933,48 +741,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-// ============================================================
-// LogsScreen
-// ============================================================
-class LogsScreen extends StatelessWidget {
-  final List<String> logs;
-
-  const LogsScreen({super.key, required this.logs});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
-      appBar: AppBar(
-        title: const Text("Logs", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0EA5E9),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: logs.isEmpty
-          ? const Center(child: Text("Aucun log pour le moment"))
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: logs.length,
-              itemBuilder: (context, index) {
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Text(
-                      logs[logs.length - 1 - index], // plus récent en haut
-                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                    ),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-
-// ============================================================
-// ExportPage
-// ============================================================
+// ==================== PAGE EXPORT ====================
 class ExportPage extends StatefulWidget {
   final String mode;
   final String host;
@@ -992,31 +759,53 @@ class ExportPage extends StatefulWidget {
 }
 
 class _ExportPageState extends State<ExportPage> {
-  final TextEditingController nameCtrl = TextEditingController(text: "Ma Config");
-  bool locked = false;
+  final nameCtrl = TextEditingController();
+  bool lockConfig = true;
+  bool hasExpire = false;
+  DateTime? expireDate;
   String? generatedLink;
 
-  void generate() {
-    final map = {
+  void generateLink() {
+    if (nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Mets un nom à la configuration")),
+      );
+      return;
+    }
+
+    final data = {
       "app": "KČØ4P VPN",
-      "name": nameCtrl.text.trim().isEmpty ? "Configuration" : nameCtrl.text.trim(),
+      "name": nameCtrl.text.trim(),
       "mode": widget.mode,
       "host": widget.host,
       "config": widget.config,
-      "locked": locked,
-      "expire_date": null,
+      "locked": lockConfig,
+      "expire_date": hasExpire && expireDate != null
+          ? expireDate!.toIso8601String()
+          : null,
+      "created_at": DateTime.now().toIso8601String(),
     };
 
-    String jsonStr = jsonEncode(map);
-    String encoded = base64.encode(utf8.encode(jsonStr));
+    String content = jsonEncode(data);
 
-    if (locked) {
-      encoded = "KCO4P_LOCKED:" + base64.encode(utf8.encode(jsonStr));
+    if (lockConfig) {
+      content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
     }
 
+    final link = "kco4p://config/${base64.encode(utf8.encode(content))}";
+
     setState(() {
-      generatedLink = "kco4p://config/$encoded";
+      generatedLink = link;
     });
+
+    Clipboard.setData(ClipboardData(text: link));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Lien copié dans le presse-papiers !"),
+        backgroundColor: Color(0xFF22C55E),
+      ),
+    );
   }
 
   @override
@@ -1024,70 +813,179 @@ class _ExportPageState extends State<ExportPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFE0F2FE),
       appBar: AppBar(
-        title: const Text("Exporter la configuration", style: TextStyle(color: Colors.white)),
+        title: const Text("Exporter en Lien", style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF0EA5E9),
+        elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text(
+              "Nom de la configuration",
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: "Nom de la configuration",
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: "Ex: Serveur MTN Cameroun",
                 filled: true,
                 fillColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              title: const Text("Verrouiller la configuration"),
-              subtitle: const Text("Empêche la modification après import"),
-              value: locked,
-              activeColor: const Color(0xFF0EA5E9),
-              onChanged: (v) => setState(() => locked = v),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: generate,
-              icon: const Icon(Icons.link),
-              label: const Text("Générer le lien"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            if (generatedLink != null) ...[
-              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              SelectableText(
-                generatedLink!,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: generatedLink!));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Lien copié !")),
-                  );
-                },
-                icon: const Icon(Icons.copy),
-                label: const Text("Copier le lien"),
+              child: SwitchListTile(
+                title: const Text("Lock config"),
+                subtitle: const Text("Configuration verrouillée (recommandé)"),
+                value: lockConfig,
+                activeColor: const Color(0xFF0EA5E9),
+                onChanged: (v) => setState(() => lockConfig = v),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text("Date d'expiration"),
+                    value: hasExpire,
+                    activeColor: const Color(0xFF0EA5E9),
+                    onChanged: (v) => setState(() => hasExpire = v),
+                  ),
+                  if (hasExpire)
+                    ListTile(
+                      title: Text(
+                        expireDate == null
+                            ? "Choisir une date"
+                            : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}",
+                      ),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now().add(const Duration(days: 30)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2035),
+                        );
+                        if (picked != null) {
+                          setState(() => expireDate = picked);
+                        }
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: generateLink,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF22C55E),
                   foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Générer le lien",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            if (generatedLink != null) ...[
+              const SizedBox(height: 20),
+              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(
+                  generatedLink!,
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+// ==================== PAGE LOGS ====================
+class LogsScreen extends StatelessWidget {
+  final List<String> logs;
+  const LogsScreen({super.key, required this.logs});
+
+  Color _getLogColor(String log) {
+    if (log.contains("ready to use") || log.contains("Import")) {
+      return const Color(0xFF22C55E);
+    }
+    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) {
+      return const Color(0xFFEF4444);
+    }
+    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
+      return const Color(0xFFF59E0B);
+    }
+    return Colors.black87;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE),
+      appBar: AppBar(
+        title: const Text("Logs", style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF0EA5E9),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: logs.isEmpty
+          ? const Center(child: Text("Aucun log pour le moment"))
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: logs.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final log = logs[i];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    log,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: _getLogColor(log),
+                      fontWeight: log.contains("ready to use")
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
