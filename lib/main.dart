@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
@@ -24,11 +26,11 @@ class Kco4pVPNApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF0FDF4), // fond vert très clair
+        scaffoldBackgroundColor: const Color(0xFFF0FDF4),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF22C55E), // primaire = vert
+          seedColor: const Color(0xFF22C55E),
           primary: const Color(0xFF22C55E),
-          secondary: const Color(0xFF0EA5E9), // secondaire = bleu
+          secondary: const Color(0xFF0EA5E9),
         ),
       ),
       home: const HomeScreen(),
@@ -43,7 +45,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   late FlutterV2ray v2ray;
 
   String statut = "DÉCONNECTÉ";
@@ -68,7 +71,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
-  // Animation pour le graphique
+  // === Graphique style SSH Custom ===
+  final List<double> downloadHistory = List.filled(40, 0.0);
+  final List<double> uploadHistory = List.filled(40, 0.0);
+  double currentDownload = 0.0;
+  double currentUpload = 0.0;
+  Timer? _trafficTimer;
+
   late AnimationController _graphController;
   late Animation<double> _graphAnimation;
 
@@ -120,8 +129,42 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         });
       },
     );
+
     initCore();
     loadLockedConfig();
+    _startFakeTraffic();
+  }
+
+  void _startFakeTraffic() {
+    _trafficTimer?.cancel();
+    _trafficTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
+      if (!mounted) return;
+
+      setState(() {
+        if (estConnecte) {
+          currentDownload = (Random().nextDouble() * 1800) + 120;
+          currentUpload = (Random().nextDouble() * 450) + 30;
+        } else if (enCours) {
+          currentDownload = Random().nextDouble() * 80;
+          currentUpload = Random().nextDouble() * 40;
+        } else {
+          currentDownload = 0;
+          currentUpload = 0;
+        }
+
+        downloadHistory.removeAt(0);
+        downloadHistory.add(currentDownload);
+        uploadHistory.removeAt(0);
+        uploadHistory.add(currentUpload);
+      });
+    });
+  }
+
+  String _formatSpeed(double kbps) {
+    if (kbps >= 1024) {
+      return "${(kbps / 1024).toStringAsFixed(1)} MB/s";
+    }
+    return "${kbps.toStringAsFixed(0)} KB/s";
   }
 
   Future<void> initCore() async {
@@ -446,7 +489,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Future<void> cleanConfig() async {
     if (!isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Aucune configuration verrouillée à effacer")),
+        const SnackBar(
+            content: Text("Aucune configuration verrouillée à effacer")),
       );
       return;
     }
@@ -509,12 +553,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF22C55E); // vert
-    if (enCours) return const Color(0xFFF59E0B); // orange
+    if (estConnecte) return const Color(0xFF22C55E);
+    if (enCours) return const Color(0xFFF59E0B);
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
     }
-    return const Color(0xFFEF4444); // rouge
+    return const Color(0xFFEF4444);
   }
 
   @override
@@ -522,6 +566,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     hostCtrl.dispose();
     configCtrl.dispose();
     _graphController.dispose();
+    _trafficTimer?.cancel();
     super.dispose();
   }
 
@@ -535,7 +580,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF22C55E), // AppBar maintenant vert
+        backgroundColor: const Color(0xFF22C55E),
         elevation: 0,
         actions: [
           IconButton(
@@ -639,96 +684,80 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // ==================== GRAPHIQUE DE STATUT ====================
-              const SizedBox(height: 18),
+              // ==================== GRAPHIQUE STYLE SSH CUSTOM ====================
+              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Column(
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          estConnecte
-                              ? "Connexion active"
-                              : enCours
-                                  ? "Établissement du tunnel..."
-                                  : "En attente",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: couleur,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF22C55E),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              "↓ ${_formatSpeed(currentDownload)}",
+                              style: const TextStyle(
+                                color: Color(0xFF22C55E),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          estConnecte
-                              ? "100%"
-                              : enCours
-                                  ? "..."
-                                  : "0%",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: couleur,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF0EA5E9),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              "↑ ${_formatSpeed(currentUpload)}",
+                              style: const TextStyle(
+                                color: Color(0xFF0EA5E9),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    AnimatedBuilder(
-                      animation: _graphAnimation,
-                      builder: (context, child) {
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: LinearProgressIndicator(
-                            value: estConnecte
-                                ? 1.0
-                                : enCours
-                                    ? _graphAnimation.value
-                                    : 0.0,
-                            minHeight: 10,
-                            backgroundColor: Colors.grey.shade200,
-                            valueColor: AlwaysStoppedAnimation<Color>(couleur),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    // Petites barres décoratives (effet graphique)
-                    Row(
-                      children: List.generate(12, (index) {
-                        final isActive = estConnecte ||
-                            (enCours && _graphAnimation.value > index / 12);
-                        return Expanded(
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                            height: 18 + (index % 3) * 4.0,
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? couleur.withOpacity(0.7 + (index % 4) * 0.07)
-                                  : Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                        );
-                      }),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 90,
+                      width: double.infinity,
+                      child: CustomPaint(
+                        painter: TrafficGraphPainter(
+                          downloadData: downloadHistory,
+                          uploadData: uploadHistory,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              // ============================================================
+              // ================================================================
 
               const SizedBox(height: 18),
               const Align(
@@ -855,252 +884,4 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 }
-
-// ==================== PAGE EXPORT ====================
-class ExportPage extends StatefulWidget {
-  final String mode;
-  final String host;
-  final String config;
-
-  const ExportPage({
-    super.key,
-    required this.mode,
-    required this.host,
-    required this.config,
-  });
-
-  @override
-  State<ExportPage> createState() => _ExportPageState();
-}
-
-class _ExportPageState extends State<ExportPage> {
-  final nameCtrl = TextEditingController();
-  bool lockConfig = true;
-  bool hasExpire = false;
-  DateTime? expireDate;
-  String? generatedLink;
-
-  void generateLink() {
-    if (nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Mets un nom à la configuration")),
-      );
-      return;
-    }
-
-    final data = {
-      "app": "KČØ4P VPN",
-      "name": nameCtrl.text.trim(),
-      "mode": widget.mode,
-      "host": widget.host,
-      "config": widget.config,
-      "locked": lockConfig,
-      "expire_date": hasExpire && expireDate != null
-          ? expireDate!.toIso8601String()
-          : null,
-      "created_at": DateTime.now().toIso8601String(),
-    };
-
-    String content = jsonEncode(data);
-
-    if (lockConfig) {
-      content = "KCO4P_LOCKED:${base64.encode(utf8.encode(content))}";
-    }
-
-    final link = "kco4p://config/${base64.encode(utf8.encode(content))}";
-
-    setState(() {
-      generatedLink = link;
-    });
-
-    Clipboard.setData(ClipboardData(text: link));
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Lien copié dans le presse-papiers !"),
-        backgroundColor: Color(0xFF22C55E),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0FDF4),
-      appBar: AppBar(
-        title: const Text("Exporter en Lien", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF22C55E),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Nom de la configuration",
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: nameCtrl,
-              decoration: InputDecoration(
-                hintText: "Ex: Serveur MTN Cameroun",
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: SwitchListTile(
-                title: const Text("Lock config"),
-                subtitle: const Text("Configuration verrouillée (recommandé)"),
-                value: lockConfig,
-                activeColor: const Color(0xFF22C55E),
-                onChanged: (v) => setState(() => lockConfig = v),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    title: const Text("Date d'expiration"),
-                    value: hasExpire,
-                    activeColor: const Color(0xFF22C55E),
-                    onChanged: (v) => setState(() => hasExpire = v),
-                  ),
-                  if (hasExpire)
-                    ListTile(
-                      title: Text(
-                        expireDate == null
-                            ? "Choisir une date"
-                            : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
-                      ),
-                      trailing: const Icon(Icons.calendar_today),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now().add(const Duration(days: 30)),
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime(2035),
-                        );
-                        if (picked != null) {
-                          setState(() => expireDate = picked);
-                        }
-                      },
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: generateLink,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF22C55E),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  "Générer le lien",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            if (generatedLink != null) ...[
-              const SizedBox(height: 20),
-              const Text("Lien généré :", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: SelectableText(
-                  generatedLink!,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==================== PAGE LOGS ====================
-class LogsScreen extends StatelessWidget {
-  final List<String> logs;
-  const LogsScreen({super.key, required this.logs});
-
-  Color _getLogColor(String log) {
-    if (log.contains("ready to use") || log.contains("Import")) {
-      return const Color(0xFF22C55E);
-    }
-    if (log.contains("Erreur") || log.contains("Échec") || log.contains("expiré")) {
-      return const Color(0xFFEF4444);
-    }
-    if (log.contains("CONNECTING") || log.contains("CONNEXION")) {
-      return const Color(0xFFF59E0B);
-    }
-    return Colors.black87;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0FDF4),
-      appBar: AppBar(
-        title: const Text("Logs", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF22C55E),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: logs.isEmpty
-          ? const Center(child: Text("Aucun log pour le moment"))
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: logs.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final log = logs[i];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    log,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      color: _getLogColor(log),
-                      fontWeight: log.contains("ready to use")
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
+              
