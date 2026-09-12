@@ -45,8 +45,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late FlutterV2ray v2ray;
 
   String statut = "DÉCONNECTÉ";
@@ -412,8 +411,7 @@ class _HomeScreenState extends State<HomeScreen>
       bool wasLocked = false;
       if (content.startsWith("KCO4P_LOCKED:")) {
         wasLocked = true;
-        content = utf8.decode(
-            base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
+        content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
       }
 
       final map = jsonDecode(content);
@@ -472,9 +470,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(locked
-              ? "Config verrouillée importée : $name"
-              : "Importé : $name"),
+          content: Text(locked ? "Config verrouillée importée : $name" : "Importé : $name"),
           backgroundColor: const Color(0xFF22C55E),
         ),
       );
@@ -489,8 +485,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> cleanConfig() async {
     if (!isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Aucune configuration verrouillée à effacer")),
+        const SnackBar(content: Text("Aucune configuration verrouillée à effacer")),
       );
       return;
     }
@@ -807,6 +802,8 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(height: 16),
+
+              // ===== BOUTONS Import / Clean / Export =====
               Row(
                 children: [
                   Expanded(
@@ -872,6 +869,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
               ),
+              // ==========================================
+
               const Spacer(),
               const Text(
                 "DEV : kcørp tech serf",
@@ -884,4 +883,3 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
-              
