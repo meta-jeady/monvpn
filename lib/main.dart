@@ -24,11 +24,11 @@ class Kco4pVPNApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFE0F2FE),
+        scaffoldBackgroundColor: const Color(0xFFF0FDF4), // fond vert très clair
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0EA5E9),
-          primary: const Color(0xFF0EA5E9),
-          secondary: const Color(0xFF22C55E),
+          seedColor: const Color(0xFF22C55E), // primaire = vert
+          primary: const Color(0xFF22C55E),
+          secondary: const Color(0xFF0EA5E9), // secondaire = bleu
         ),
       ),
       home: const HomeScreen(),
@@ -43,7 +43,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late FlutterV2ray v2ray;
 
   String statut = "DÉCONNECTÉ";
@@ -68,9 +68,22 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
+  // Animation pour le graphique
+  late AnimationController _graphController;
+  late Animation<double> _graphAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    _graphController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _graphAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _graphController, curve: Curves.easeInOut),
+    );
+
     v2ray = FlutterV2ray(
       onStatusChanged: (status) {
         if (!mounted) return;
@@ -78,11 +91,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           if (state == "CONNECTED") {
-            if (statut!= "FREE SERF") {
+            if (statut != "FREE SERF") {
               addLog("→ ready to use");
               statut = "FREE SERF";
               estConnecte = true;
               enCours = false;
+              _graphController.forward();
 
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -96,10 +110,12 @@ class _HomeScreenState extends State<HomeScreen> {
             statut = "CONNEXION...";
             enCours = true;
             estConnecte = false;
+            _graphController.repeat(reverse: true);
           } else {
             statut = "DÉCONNECTÉ";
             estConnecte = false;
             enCours = false;
+            _graphController.reset();
           }
         });
       },
@@ -135,13 +151,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> loadLockedConfig() async {
     final prefs = await SharedPreferences.getInstance();
-    final locked = prefs.getBool('isLocked')?? false;
+    final locked = prefs.getBool('isLocked') ?? false;
 
     if (locked) {
       setState(() {
         isLocked = true;
         lockedName = prefs.getString('lockedName');
-        modeSelectionne = prefs.getString('lockedMode')?? "VLESS / VMess";
+        modeSelectionne = prefs.getString('lockedMode') ?? "VLESS / VMess";
         lockedHost = prefs.getString('lockedHost');
         lockedConfig = prefs.getString('lockedConfig');
         hostCtrl.text = "*******";
@@ -153,10 +169,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void addLog(String msg) {
     String safeMsg = msg;
-    if (lockedHost!= null && lockedHost!.isNotEmpty) {
+    if (lockedHost != null && lockedHost!.isNotEmpty) {
       safeMsg = safeMsg.replaceAll(lockedHost!, "*******");
     }
-    if (hostCtrl.text.isNotEmpty && hostCtrl.text!= "*******") {
+    if (hostCtrl.text.isNotEmpty && hostCtrl.text != "*******") {
       safeMsg = safeMsg.replaceAll(hostCtrl.text, "*******");
     }
 
@@ -189,8 +205,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (!raw.startsWith("vless://") &&
-         !raw.startsWith("vmess://") &&
-         !raw.startsWith("trojan://")) {
+          !raw.startsWith("vmess://") &&
+          !raw.startsWith("trojan://")) {
         return null;
       }
 
@@ -200,19 +216,19 @@ class _HomeScreenState extends State<HomeScreen> {
       final Map<String, dynamic> json = jsonDecode(full);
 
       if (host.isNotEmpty &&
-          json["outbounds"]!= null &&
+          json["outbounds"] != null &&
           json["outbounds"].isNotEmpty) {
         final outbound = json["outbounds"][0];
-        final stream = outbound["streamSettings"]?? {};
-        final network = stream["network"]?? "ws";
+        final stream = outbound["streamSettings"] ?? {};
+        final network = stream["network"] ?? "ws";
 
         if (network == "ws") {
-          stream["wsSettings"]??= {};
-          stream["wsSettings"]["headers"]??= {};
+          stream["wsSettings"] ??= {};
+          stream["wsSettings"]["headers"] ??= {};
           stream["wsSettings"]["headers"]["Host"] = host;
           addLog("Host injecté: *******");
         } else if (network == "http" || network == "h2") {
-          stream["httpSettings"]??= {};
+          stream["httpSettings"] ??= {};
           stream["httpSettings"]["host"] = [host];
           addLog("Host HTTP injecté: *******");
         }
@@ -235,12 +251,13 @@ class _HomeScreenState extends State<HomeScreen> {
         enCours = false;
         statut = "DÉCONNECTÉ";
       });
+      _graphController.reset();
       addLog("Déconnecté");
       return;
     }
 
-    final raw = isLocked? (lockedConfig?? "") : configCtrl.text.trim();
-    final host = isLocked? (lockedHost?? "") : hostCtrl.text.trim();
+    final raw = isLocked ? (lockedConfig ?? "") : configCtrl.text.trim();
+    final host = isLocked ? (lockedHost ?? "") : hostCtrl.text.trim();
 
     if (raw.isEmpty) {
       addLog("Aucune configuration");
@@ -269,6 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
       enCours = true;
       statut = "CONNEXION...";
     });
+    _graphController.repeat(reverse: true);
 
     addLog("Mode: $modeSelectionne");
     addLog("Demande permission VPN...");
@@ -281,6 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
           enCours = false;
           statut = "PERMISSION REFUSÉE";
         });
+        _graphController.reset();
         return;
       }
 
@@ -296,6 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
         enCours = false;
         statut = "ÉCHEC";
       });
+      _graphController.reset();
     }
   }
 
@@ -323,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context, linkCtrl.text.trim()),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9),
+                backgroundColor: const Color(0xFF22C55E),
                 foregroundColor: Colors.white,
               ),
               child: const Text("Importer"),
@@ -355,16 +375,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final map = jsonDecode(content);
 
-      if (map["app"]!= "KČØ4P VPN") {
+      if (map["app"] != "KČØ4P VPN") {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Lien non compatible")),
         );
         return;
       }
 
-      if (map["expire_date"]!= null) {
+      if (map["expire_date"] != null) {
         final expire = DateTime.tryParse(map["expire_date"]);
-        if (expire!= null && DateTime.now().isAfter(expire)) {
+        if (expire != null && DateTime.now().isAfter(expire)) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Cette configuration a expiré")),
           );
@@ -372,10 +392,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      final name = map["name"]?? "Configuration";
-      final mode = map["mode"]?? "VLESS / VMess";
-      final host = map["host"]?? "";
-      final config = map["config"]?? "";
+      final name = map["name"] ?? "Configuration";
+      final mode = map["mode"] ?? "VLESS / VMess";
+      final host = map["host"] ?? "";
+      final config = map["config"] ?? "";
       final locked = map["locked"] == true || wasLocked;
 
       if (locked) {
@@ -410,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(locked
-             ? "Config verrouillée importée : $name"
+              ? "Config verrouillée importée : $name"
               : "Importé : $name"),
           backgroundColor: const Color(0xFF22C55E),
         ),
@@ -436,7 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => AlertDialog(
         title: const Text("Effacer la configuration"),
         content: Text(
-          "Supprimer définitivement la configuration \"${lockedName?? 'verrouillée'}\"?\n\nL'app redeviendra vierge.",
+          "Supprimer définitivement la configuration \"${lockedName ?? 'verrouillée'}\"?\n\nL'app redeviendra vierge.",
         ),
         actions: [
           TextButton(
@@ -455,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    if (confirm!= true) return;
+    if (confirm != true) return;
 
     if (estConnecte || enCours) {
       await v2ray.stopV2Ray();
@@ -477,6 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
       enCours = false;
       logs.clear();
     });
+    _graphController.reset();
 
     addLog("App réinitialisée - configuration supprimée");
     ScaffoldMessenger.of(context).showSnackBar(
@@ -488,32 +509,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color get couleur {
-    if (estConnecte) return const Color(0xFF22C55E);
-    if (enCours) return const Color(0xFFF59E0B);
+    if (estConnecte) return const Color(0xFF22C55E); // vert
+    if (enCours) return const Color(0xFFF59E0B); // orange
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
     }
-    return const Color(0xFFEF4444);
+    return const Color(0xFFEF4444); // rouge
   }
 
   @override
   void dispose() {
     hostCtrl.dispose();
     configCtrl.dispose();
+    _graphController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
+      backgroundColor: const Color(0xFFF0FDF4),
       appBar: AppBar(
         title: const Text(
           "KČØ4P VPN",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0EA5E9),
+        backgroundColor: const Color(0xFF22C55E), // AppBar maintenant vert
         elevation: 0,
         actions: [
           IconButton(
@@ -548,12 +570,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   isExpanded: true,
                   underline: const SizedBox(),
                   items: modes
-                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                     .toList(),
+                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                      .toList(),
                   onChanged: isLocked
-                     ? null
+                      ? null
                       : (value) {
-                          if (value!= null) {
+                          if (value != null) {
                             setState(() => modeSelectionne = value);
                             addLog("Mode changé → $value");
                           }
@@ -574,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       statut,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: estConnecte? const Color(0xFF22C55E) : couleur,
+                        color: estConnecte ? const Color(0xFF22C55E) : couleur,
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
@@ -592,7 +614,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 20),
               GestureDetector(
-                onTap: enCours? null : toggle,
+                onTap: enCours ? null : toggle,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: 140,
@@ -616,7 +638,99 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+
+              // ==================== GRAPHIQUE DE STATUT ====================
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          estConnecte
+                              ? "Connexion active"
+                              : enCours
+                                  ? "Établissement du tunnel..."
+                                  : "En attente",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: couleur,
+                          ),
+                        ),
+                        Text(
+                          estConnecte
+                              ? "100%"
+                              : enCours
+                                  ? "..."
+                                  : "0%",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: couleur,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    AnimatedBuilder(
+                      animation: _graphAnimation,
+                      builder: (context, child) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: estConnecte
+                                ? 1.0
+                                : enCours
+                                    ? _graphAnimation.value
+                                    : 0.0,
+                            minHeight: 10,
+                            backgroundColor: Colors.grey.shade200,
+                            valueColor: AlwaysStoppedAnimation<Color>(couleur),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    // Petites barres décoratives (effet graphique)
+                    Row(
+                      children: List.generate(12, (index) {
+                        final isActive = estConnecte ||
+                            (enCours && _graphAnimation.value > index / 12);
+                        return Expanded(
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                            height: 18 + (index % 3) * 4.0,
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? couleur.withOpacity(0.7 + (index % 4) * 0.07)
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+              // ============================================================
+
+              const SizedBox(height: 18),
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -627,12 +741,12 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               TextField(
                 controller: hostCtrl,
-                enabled:!isLocked,
+                enabled: !isLocked,
                 obscureText: isLocked,
                 decoration: InputDecoration(
                   hintText: "Exemple: yamo.mtn.cm",
                   filled: true,
-                  fillColor: isLocked? Colors.grey.shade200 : Colors.white,
+                  fillColor: isLocked ? Colors.grey.shade200 : Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -672,7 +786,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.download_rounded, size: 18),
                       label: const Text("Import"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0EA5E9),
+                        backgroundColor: const Color(0xFF22C55E),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -718,7 +832,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.link, size: 18),
                       label: const Text("Export"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF22C55E),
+                        backgroundColor: const Color(0xFF0EA5E9),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -741,6 +855,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
 // ==================== PAGE EXPORT ====================
 class ExportPage extends StatefulWidget {
   final String mode;
@@ -811,10 +926,10 @@ class _ExportPageState extends State<ExportPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
+      backgroundColor: const Color(0xFFF0FDF4),
       appBar: AppBar(
         title: const Text("Exporter en Lien", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0EA5E9),
+        backgroundColor: const Color(0xFF22C55E),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -850,7 +965,7 @@ class _ExportPageState extends State<ExportPage> {
                 title: const Text("Lock config"),
                 subtitle: const Text("Configuration verrouillée (recommandé)"),
                 value: lockConfig,
-                activeColor: const Color(0xFF0EA5E9),
+                activeColor: const Color(0xFF22C55E),
                 onChanged: (v) => setState(() => lockConfig = v),
               ),
             ),
@@ -865,7 +980,7 @@ class _ExportPageState extends State<ExportPage> {
                   SwitchListTile(
                     title: const Text("Date d'expiration"),
                     value: hasExpire,
-                    activeColor: const Color(0xFF0EA5E9),
+                    activeColor: const Color(0xFF22C55E),
                     onChanged: (v) => setState(() => hasExpire = v),
                   ),
                   if (hasExpire)
@@ -873,7 +988,7 @@ class _ExportPageState extends State<ExportPage> {
                       title: Text(
                         expireDate == null
                             ? "Choisir une date"
-                            : "Expire le : ${expireDate!.day}/${expireDate!.month}/${expireDate!.year}",
+                            : "Expire le : \( {expireDate!.day}/ \){expireDate!.month}/${expireDate!.year}",
                       ),
                       trailing: const Icon(Icons.calendar_today),
                       onTap: () async {
@@ -955,10 +1070,10 @@ class LogsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE0F2FE),
+      backgroundColor: const Color(0xFFF0FDF4),
       appBar: AppBar(
         title: const Text("Logs", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0EA5E9),
+        backgroundColor: const Color(0xFF22C55E),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
