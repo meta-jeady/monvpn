@@ -45,7 +45,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   late FlutterV2ray v2ray;
 
   String statut = "DÉCONNECTÉ";
@@ -70,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final TextEditingController configCtrl = TextEditingController();
   final List<String> logs = [];
 
-  // === Graphique style SSH Custom ===
+  // Graphique trafic
   final List<double> downloadHistory = List.filled(40, 0.0);
   final List<double> uploadHistory = List.filled(40, 0.0);
   double currentDownload = 0.0;
@@ -411,7 +412,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       bool wasLocked = false;
       if (content.startsWith("KCO4P_LOCKED:")) {
         wasLocked = true;
-        content = utf8.decode(base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
+        content = utf8.decode(
+            base64.decode(content.replaceFirst("KCO4P_LOCKED:", "")));
       }
 
       final map = jsonDecode(content);
@@ -470,7 +472,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(locked ? "Config verrouillée importée : $name" : "Importé : $name"),
+          content: Text(locked
+              ? "Config verrouillée importée : $name"
+              : "Importé : $name"),
           backgroundColor: const Color(0xFF22C55E),
         ),
       );
@@ -485,7 +489,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Future<void> cleanConfig() async {
     if (!isLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Aucune configuration verrouillée à effacer")),
+        const SnackBar(
+            content: Text("Aucune configuration verrouillée à effacer")),
       );
       return;
     }
@@ -869,7 +874,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ],
               ),
-              // ==========================================
+              // ================================================
 
               const Spacer(),
               const Text(
