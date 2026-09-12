@@ -26,11 +26,11 @@ class Kco4pVPNApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF0FDF4),
+        scaffoldBackgroundColor: Colors.white,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF22C55E),
+          seedColor: const Color(0xFF22C55E), // vert
           primary: const Color(0xFF22C55E),
-          secondary: const Color(0xFF0EA5E9),
+          secondary: const Color(0xFFFACC15), // jaune
         ),
       ),
       home: const HomeScreen(),
@@ -79,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _trafficTimer;
 
   late AnimationController _graphController;
-  late Animation<double> _graphAnimation;
 
   @override
   void initState() {
@@ -88,9 +87,6 @@ class _HomeScreenState extends State<HomeScreen>
     _graphController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    );
-    _graphAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _graphController, curve: Curves.easeInOut),
     );
 
     v2ray = FlutterV2ray(
@@ -554,7 +550,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Color get couleur {
     if (estConnecte) return const Color(0xFF22C55E);
-    if (enCours) return const Color(0xFFF59E0B);
+    if (enCours) return const Color(0xFFFACC15); // jaune
     if (statut.contains("INVALIDE") || statut.contains("ÉCHEC")) {
       return const Color(0xFF6B7280);
     }
@@ -573,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0FDF4),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
           "KČØ4P VPN",
@@ -607,7 +603,7 @@ class _HomeScreenState extends State<HomeScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFFFFFBEB), // jaune très clair
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButton<String>(
@@ -632,7 +628,7 @@ class _HomeScreenState extends State<HomeScreen>
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -641,7 +637,11 @@ class _HomeScreenState extends State<HomeScreen>
                       statut,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: estConnecte ? const Color(0xFF22C55E) : couleur,
+                        color: estConnecte
+                            ? const Color(0xFF22C55E)
+                            : enCours
+                                ? const Color(0xFFFACC15)
+                                : couleur,
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
